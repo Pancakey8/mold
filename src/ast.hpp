@@ -55,26 +55,31 @@ struct Ident {
   std::string_view name;
 };
 
+#define BINARYOP_KIND_LIST(X)                                                  \
+  X(AND)                                                                       \
+  X(OR)                                                                        \
+  X(BITAND)                                                                    \
+  X(BITOR)                                                                     \
+  X(EQ)                                                                        \
+  X(NEQ)                                                                       \
+  X(LT)                                                                        \
+  X(GT)                                                                        \
+  X(LE)                                                                        \
+  X(GE)                                                                        \
+  X(SHL)                                                                       \
+  X(SHR)                                                                       \
+  X(ADD)                                                                       \
+  X(SUB)                                                                       \
+  X(MULT)                                                                      \
+  X(DIV)                                                                       \
+  X(MOD)                                                                       \
+  X(COAL)
+
 struct BinaryOp {
   enum Kind {
-    AND,
-    OR,
-    BITAND,
-    BITOR,
-    EQ,
-    NEQ,
-    LT,
-    GT,
-    LE,
-    GE,
-    SHL,
-    SHR,
-    ADD,
-    SUB,
-    MULT,
-    DIV,
-    MOD,
-    COAL
+#define X(K) K,
+BINARYOP_KIND_LIST(X)
+#undef X
   } kind;
   NodeId left, right;
 };
@@ -140,11 +145,35 @@ struct Error {
   std::string_view msg;
 };
 
+class NodePool;
+
+#define NODE_KIND_LIST(F, R)                                                   \
+  F(LitInt)                                                                    \
+  R(LitReal)                                                                   \
+  R(LitBool)                                                                   \
+  R(LitString)                                                                 \
+  R(LitNull)                                                                   \
+  R(Ident)                                                                     \
+  R(BinaryOp)                                                                  \
+  R(LetIn)                                                                     \
+  R(IfElse)                                                                    \
+  R(PreVal)                                                                    \
+  R(FuncCall)                                                                  \
+  R(TypeName)                                                                  \
+  R(Input)                                                                     \
+  R(Output)                                                                    \
+  R(Formula)                                                                   \
+  R(Signal)                                                                    \
+  R(Extern)                                                                    \
+  R(Function)                                                                  \
+  R(Error)
+
 struct Node {
-  using Var =
-      std::variant<LitInt, LitReal, LitBool, LitString, LitNull, Ident,
-                   BinaryOp, LetIn, IfElse, PreVal, FuncCall, TypeName, Input,
-                   Output, Formula, Signal, Extern, Function, Error>;
+#define F(N) N
+#define R(N) , N
+  using Var = std::variant<NODE_KIND_LIST(F, R)>;
+#undef F
+#undef R
   Var data;
   Source source;
 
@@ -154,26 +183,11 @@ struct Node {
       std::is_same_v<T, Formula> || std::is_same_v<T, Signal> ||
       std::is_same_v<T, Extern> || std::is_same_v<T, Function>;
 
-  bool is_toplevel() const {
-    return std::visit(
-        [](const auto &node) {
-          return is_toplevel_v<std::decay_t<decltype(node)>>;
-        },
-        data);
-  }
+  bool is_toplevel() const;
 
-  std::string_view toplevel_name() const {
-    return std::visit(
-        [](const auto &node) -> std::string_view {
-          using T = std::decay_t<decltype(node)>;
-          if constexpr (is_toplevel_v<T>) {
-            return node.name;
-          } else {
-            assert(false && "Name of non-top-level requested");
-          }
-        },
-        data);
-  }
+  std::string_view toplevel_name() const;
+
+  std::string show(const NodePool &pool) const;
 };
 
 class NodePool {

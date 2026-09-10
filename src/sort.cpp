@@ -1,4 +1,5 @@
 #include "sort.hpp"
+#include "ast.hpp"
 #include "utils.hpp"
 #include <queue>
 #include <unordered_map>
@@ -28,7 +29,7 @@ void deps_of(const AST &ast, NodeId node, std::vector<std::string_view> &deps,
                [&](const IfElse &n) {
                  deps_of(ast, n.cond, deps, locals);
                  deps_of(ast, n.tru, deps, locals);
-                 deps_of(ast, n.fals, deps, locals);
+                 if (n.fals != NODEID_NONE) deps_of(ast, n.fals, deps, locals);
                },
                [&](const PreVal &) {},
                [&](const FuncCall &n) {
