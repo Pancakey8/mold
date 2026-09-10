@@ -1,0 +1,208 @@
+#pragma once
+
+#include "lexer.hpp"
+#include <cassert>
+#include <cstdint>
+#include <flat_map>
+#include <format>
+#include <vector>
+
+struct NodeId {
+  using Type = std::uint32_t;
+
+  Type id;
+
+  bool operator==(const NodeId &other) const = default;
+  bool operator<(const NodeId &other) const { return id < other.id; }
+  NodeId &operator++() {
+    ++id;
+    return *this;
+  }
+};
+
+constexpr NodeId NODEID_NONE{UINT32_MAX};
+
+template <> struct std::formatter<NodeId> {
+  constexpr auto parse(std::format_parse_context &ctx) const {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const NodeId &id, FormatContext &ctx) const {
+    return std::format_to(ctx.out(), "Node({})", id.id);
+  }
+};
+
+struct LitInt {
+  std::int64_t val;
+};
+
+struct LitReal {
+  double val;
+};
+
+struct LitBool {
+  bool val;
+};
+
+struct LitString {
+  std::string_view val;
+};
+
+struct LitNull {};
+
+struct Ident {
+  std::string_view name;
+};
+
+struct BinaryOp {
+  enum Kind {
+    AND,
+    OR,
+    BITAND,
+    BITOR,
+    EQ,
+    NEQ,
+    LT,
+    GT,
+    LE,
+    GE,
+    SHL,
+    SHR,
+    ADD,
+    SUB,
+    MULT,
+    DIV,
+    MOD,
+    COAL
+  } kind;
+  NodeId left, right;
+};
+
+struct LetIn {
+  std::string_view name;
+  NodeId init, body;
+};
+
+struct IfElse {
+  NodeId cond, tru, fals;
+};
+
+struct PreVal {
+  std::string_view name;
+  std::uint32_t depth;
+};
+
+struct FuncCall {
+  std::string_view name;
+  std::vector<NodeId> params;
+};
+
+struct TypeName {
+  std::string_view base;
+  bool nullable;
+};
+
+struct Input {
+  std::string_view name;
+  NodeId type;
+};
+
+struct Output {
+  std::string_view name;
+  std::flat_map<std::string_view, NodeId> params;
+};
+
+struct Formula {
+  std::string_view name;
+  NodeId init;
+};
+
+struct Signal {
+  std::string_view name;
+  NodeId init;
+};
+
+struct Extern {
+  std::string_view name;
+  std::flat_map<std::string_view, NodeId> params;
+  NodeId ret;
+  bool pure;
+};
+
+struct Function {
+  std::string_view name;
+  std::vector<std::string_view> params;
+  NodeId init;
+};
+
+struct Error {
+  std::string_view msg;
+};
+
+struct Node {
+  using Var =
+      std::variant<LitInt, LitReal, LitBool, LitString, LitNull, Ident,
+                   BinaryOp, LetIn, IfElse, PreVal, FuncCall, TypeName, Input,
+                   Output, Formula, Signal, Extern, Function, Error>;
+  Var data;
+  Source source;
+
+  template <typename T>
+  constexpr static bool is_toplevel_v =
+      std::is_same_v<T, Input> || std::is_same_v<T, Output> ||
+      std::is_same_v<T, Formula> || std::is_same_v<T, Signal> ||
+      std::is_same_v<T, Extern> || std::is_same_v<T, Function>;
+
+  bool is_toplevel() const {
+    return std::visit(
+        [](const auto &node) {
+          return is_toplevel_v<std::decay_t<decltype(node)>>;
+        },
+        data);
+  }
+
+  std::string_view toplevel_name() const {
+    return std::visit(
+        [](const auto &node) -> std::string_view {
+          using T = std::decay_t<decltype(node)>;
+          if constexpr (is_toplevel_v<T>) {
+            return node.name;
+          } else {
+            assert(false && "Name of non-top-level requested");
+          }
+        },
+        data);
+  }
+};
+
+class NodePool {
+public:
+  NodeId push(Node n) {
+    nodes.push_back(std::move(n));
+    return {static_cast<std::uint32_t>(nodes.size() - 1)};
+  }
+
+  Node &operator[](NodeId id) { return nodes[id.id]; }
+  const Node &operator[](NodeId id) const { return nodes[id.id]; }
+
+  NodeId begin() const { return {0}; }
+  NodeId end() const { return {static_cast<NodeId::Type>(nodes.size())}; }
+
+  NodeId::Type size() const { return nodes.size(); }
+
+private:
+  std::vector<Node> nodes;
+};
+
+struct AST {
+  NodePool pool;
+  std::vector<NodeId> tls;
+
+  Node &operator[](NodeId id) { return pool[id]; }
+  const Node &operator[](NodeId id) const { return pool[id]; }
+
+  NodeId begin() const { return pool.begin(); }
+  NodeId end() const { return pool.end(); }
+  NodeId::Type size() const { return pool.size(); }
+};
