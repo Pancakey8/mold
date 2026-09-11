@@ -15,7 +15,7 @@ struct Cast {
 };
 
 struct Inline {
-  NodeId callee;
+  std::string_view callee;
   std::vector<NodeId> params;
   NodeId formula;
 };
@@ -101,6 +101,11 @@ struct Constraint {
   std::vector<std::vector<MoldType>> cases;
 };
 
+struct Signature {
+  std::vector<InternType> params;
+  InternType ret;
+};
+
 class Typing {
 public:
   explicit Typing(const AST &ast, const SortResult &sorting)
@@ -116,6 +121,7 @@ private:
   std::vector<Constraint> ctrs{};
   std::vector<std::pair<std::string_view, InternType>> locals{};
   std::unordered_map<std::string_view, InternType> globals{};
+  std::unordered_map<std::string_view, Signature> sigs{};
 
   std::vector<InternType> inferred{};
   TypedNodePool pool{};

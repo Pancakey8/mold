@@ -7,7 +7,9 @@ TypedAST Typing::run() {
   std::vector<NodeId> tls{};
 
   for (auto id : sorting.order) {
-    tls.push_back(infer(id));
+    if (!std::holds_alternative<Function>(ast[id].data)) {
+      tls.push_back(infer(id));
+    }
   }
 
   propagate();
@@ -90,6 +92,10 @@ NodeId Typing::infer(NodeId id) {
                    {MoldType::INT, ty_r.nullable}},
                   {{MoldType::REAL, ty_l.nullable},
                    {MoldType::REAL, ty_r.nullable}},
+                  {{MoldType::DATE, ty_l.nullable},
+                   {MoldType::DATE, ty_r.nullable}},
+                  {{MoldType::TIME, ty_l.nullable},
+                   {MoldType::TIME, ty_r.nullable}},
                 }
               };
               // clang-format on
@@ -116,11 +122,24 @@ NodeId Typing::infer(NodeId id) {
                 }
               };
               // clang-format on
-              // TODO: Other overloads
               if (n.kind == BinaryOp::ADD) {
                 c.cases.push_back({{MoldType::STRING, ty_l.nullable},
                                    {MoldType::STRING, ty_r.nullable},
                                    {MoldType::STRING, nullable}});
+                c.cases.push_back({{MoldType::DATE, ty_l.nullable},
+                                   {MoldType::TIME, ty_r.nullable},
+                                   {MoldType::DATE, nullable}});
+                c.cases.push_back({{MoldType::TIME, ty_l.nullable},
+                                   {MoldType::DATE, ty_r.nullable},
+                                   {MoldType::DATE, nullable}});
+              }
+              if (n.kind == BinaryOp::SUB) {
+                c.cases.push_back({{MoldType::DATE, ty_l.nullable},
+                                   {MoldType::TIME, ty_r.nullable},
+                                   {MoldType::DATE, nullable}});
+                c.cases.push_back({{MoldType::DATE, ty_l.nullable},
+                                   {MoldType::DATE, ty_r.nullable},
+                                   {MoldType::TIME, nullable}});
               }
               ctrs.push_back(c);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
@@ -170,7 +189,38 @@ NodeId Typing::infer(NodeId id) {
             return push_node(n, ast[id].source, t);
           },
           [&](const FuncCall &n) -> NodeId {
-            assert(false && "TODO: Function call");
+            auto callee_id = sorting.tls_names.at(n.name);
+            const auto &callee = ast[callee_id];
+            if (auto fn = std::get_if<Function>(&callee.data)) {
+              if (fn->params.size() != n.params.size())
+                assert(false && "TODO: Error handling");
+              std::vector<NodeId> params{};
+              for (auto p : n.params) {
+                params.push_back(infer(p));
+              }
+              for (std::size_t i = 0; i < params.size(); ++i) {
+                locals.push_back({fn->params[i], inferred[params[i].id]});
+              }
+              auto form = infer(fn->init);
+              locals.resize(locals.size() - params.size());
+              return push_node(Inline{n.name, std::move(params), form},
+                               ast[id].source, inferred[form.id]);
+            } else if (sigs.contains(n.name)) {
+              const auto &sig = sigs.at(n.name);
+              if (sig.params.size() != n.params.size())
+                assert(false && "TODO: Error handling");
+              std::vector<NodeId> params{};
+              for (std::size_t i = 0; i < n.params.size(); ++i) {
+                auto p = infer(n.params[i]);
+                if (!unify(inferred[p.id], sig.params[i]))
+                  assert(false && "TODO: Error handling");
+                params.push_back(p);
+              }
+              return push_node(FuncCall{n.name, std::move(params)},
+                               ast[id].source, sig.ret);
+            } else {
+              assert(false && "TODO: Error handling");
+            }
           },
           [&](const TypeName &n) -> NodeId {
             MoldType::Base base{MoldType::FAIL};
@@ -197,7 +247,6 @@ NodeId Typing::infer(NodeId id) {
             auto ty_sig = inferred[sig.id];
             return push_node(Input{n.name, sig}, ast[id].source, ty_sig);
           },
-          [&](const Output &n) -> NodeId { assert(false && "TODO: Output"); },
           [&](const Formula &n) -> NodeId {
             auto init = infer(n.init);
             auto ty_init = inferred[init.id];
@@ -209,13 +258,54 @@ NodeId Typing::infer(NodeId id) {
             return push_node(Formula{n.name, init}, ast[id].source, ty_init);
           },
           [&](const Signal &n) -> NodeId {
-            assert(false && "TODO: Signal def");
+            auto init = infer(n.init);
+            auto ty_init = inferred[init.id];
+            if (globals.contains(n.name)) {
+              if (!unify(globals[n.name], ty_init))
+                assert(false && "TODO: Error handling");
+            }
+            globals[n.name] = ty_init;
+            if (!unify(ty_init, InternType::concrete(MoldType::EVENT, true)))
+              assert(false && "TODO: Error handling");
+            return push_node(Signal{n.name, init}, ast[id].source, ty_init);
+          },
+          [&](const Output &n) -> NodeId {
+            std::flat_map<std::string_view, NodeId> params{};
+            Signature sig{};
+
+            for (auto [pname, pid] : n.params) {
+              auto p = infer(pid);
+              params[pname] = p;
+              sig.params.push_back(inferred[p.id]);
+            }
+
+            sig.ret = InternType::concrete(MoldType::EVENT);
+
+            sigs[n.name] = sig;
+            return push_node(Output{n.name, std::move(params)}, ast[id].source,
+                             sig.ret);
           },
           [&](const Extern &n) -> NodeId {
-            assert(false && "TODO: Extern def");
+            std::flat_map<std::string_view, NodeId> params{};
+            Signature sig{};
+
+            for (auto [pname, pid] : n.params) {
+              auto p = infer(pid);
+              params[pname] = p;
+              sig.params.push_back(inferred[p.id]);
+            }
+
+            auto r = infer(n.ret);
+
+            sig.ret = inferred[r.id];
+            sigs[n.name] = sig;
+
+            return push_node(Extern{n.name, std::move(params), r, n.pure},
+                             ast[id].source, sig.ret);
           },
           [&](const Function &n) -> NodeId {
-            assert(false && "TODO: Function def");
+            // Not individually handled
+            return NODEID_NONE;
           },
           [&](const Error &n) -> NodeId {
             return push_node(n, ast[id].source,
@@ -523,9 +613,9 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
             return std::format("child={}", node_str(n.child, pool));
           },
           [&](const Inline &n) {
-            return std::format(
-                "callee={}, formula={}, params={}", node_str(n.callee, pool),
-                node_str(n.formula, pool), node_vec_str(n.params, pool));
+            return std::format("callee={}, formula={}, params={}", n.callee,
+                               node_str(n.formula, pool),
+                               node_vec_str(n.params, pool));
           }},
       data);
 
