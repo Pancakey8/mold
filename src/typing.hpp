@@ -20,8 +20,12 @@ struct Inline {
   NodeId formula;
 };
 
+#define TYPE_BASE_LIST(X) X(INT) X(REAL) X(BOOL) X(STRING) X(DATE) X(TIME) X(EVENT)
+
 struct MoldType {
-  enum Base { FAIL, INT, REAL, BOOL, STRING, DATE, TIME, EVENT } base;
+#define X(T) T,
+  enum Base { FAIL, TYPE_BASE_LIST(X) } base;
+#undef X
   bool nullable;
 
   std::string show() const;
@@ -131,6 +135,8 @@ private:
   [[nodiscard]]
   bool unify(InternType a, InternType b);
 
+  InternType join(InternType a, InternType b);
+
   bool compatible(InternType have, MoldType exp);
 
   bool propagating{false};
@@ -142,6 +148,8 @@ private:
   NodeId push_node(TypedNode::Var var, Source src, InternType t);
 
   InternType lookup(std::string_view name);
+
+  bool assignable(InternType arg, InternType param);
 
   NodeId infer(NodeId id);
 };
