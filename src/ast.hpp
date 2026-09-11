@@ -82,6 +82,8 @@ BINARYOP_KIND_LIST(X)
 #undef X
   } kind;
   NodeId left, right;
+
+  static std::string op_str(BinaryOp::Kind kind);
 };
 
 struct LetIn {

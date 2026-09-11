@@ -22,7 +22,7 @@ std::string_view Node::toplevel_name() const {
       data);
 }
 
-std::string_view op_str(BinaryOp::Kind kind) {
+std::string BinaryOp::op_str(BinaryOp::Kind kind) {
 #define X(K)                                                                   \
   case BinaryOp::K:                                                            \
     return #K;
@@ -93,8 +93,9 @@ std::string Node::show(const NodePool &pool) const {
           [&](const LitNull &) { return std::string(); },
           [&](const Ident &n) { return std::format("name={}", n.name); },
           [&](const BinaryOp &n) {
-            return std::format("kind={}, left={}, right={}", op_str(n.kind),
-                               node_str(n.left, pool), node_str(n.right, pool));
+            return std::format("kind={}, left={}, right={}",
+                               BinaryOp::op_str(n.kind), node_str(n.left, pool),
+                               node_str(n.right, pool));
           },
           [&](const LetIn &n) {
             return std::format("name={}, init={}, body={}", n.name,
