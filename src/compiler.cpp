@@ -7,6 +7,7 @@
 #include <flat_map>
 #include <format>
 #include <print>
+#include <ranges>
 #include <variant>
 
 void Compiler::run() {
@@ -44,6 +45,8 @@ void Compiler::compile(NodeId id) {
             auto it = std::find(locals.rbegin(), locals.rend(), n.name);
             if (it != locals.rend()) {
               std::size_t index = std::distance(locals.begin(), it.base() - 1);
+              instrs.emplace_back(HInstr::Comment{
+                  std::format("local name = {}", locals[index])});
               instrs.emplace_back(
                   HInstr::Local{static_cast<HInstr::LocId>(index)});
             } else {
@@ -57,16 +60,42 @@ void Compiler::compile(NodeId id) {
           },
           [&](const LetIn &n) {
             compile(n.init);
+            instrs.emplace_back(
+                HInstr::Comment{std::format("push local {}", n.name)});
             instrs.emplace_back(HInstr::PushLocal{});
             locals.push_back(n.name);
             compile(n.body);
+            instrs.emplace_back(
+                HInstr::Comment{std::format("pop local {}", n.name)});
             instrs.emplace_back(HInstr::PopLocal{});
             locals.pop_back();
           },
-          [&](const IfElse &n) { assert(false && "TODO: if-else"); },
-          [&](const PreVal &n) { assert(false && "TODO: pre"); },
+          [&](const IfElse &n) {
+            compile(n.cond);
+            auto join = fresh_label();
+            auto fals = fresh_label();
+            instrs.emplace_back(HInstr::JumpFalse{fals});
+            compile(n.tru);
+            instrs.emplace_back(HInstr::Jump{join});
+            instrs.emplace_back(HInstr::Label{fals});
+            if (n.fals != NODEID_NONE) {
+              compile(n.fals);
+            } else {
+              instrs.emplace_back(HInstr::Const{std::monostate()});
+            }
+            instrs.emplace_back(HInstr::Label{join});
+          },
+          [&](const PreVal &n) {
+            instrs.emplace_back(
+                HInstr::LoadAt{n.name, static_cast<uint16_t>(n.depth)});
+          },
           [&](const FuncCall &n) {
+            instrs.emplace_back(
+                HInstr::Comment{std::format("params {}:", n.name)});
+            std::size_t i = 0;
             for (auto p : n.params) {
+              instrs.emplace_back(
+                  HInstr::Comment{std::format("- param #{}:", ++i)});
               compile(p);
             }
             if (events.contains(n.name)) {
@@ -79,6 +108,8 @@ void Compiler::compile(NodeId id) {
           },
           [&](const TypeName &n) {}, // N/A here
           [&](const Input &n) {
+            instrs.emplace_back(HInstr::Comment{
+                std::format("in {} : {}", n.name, ast[n.type].type.show())});
             instrs.emplace_back(HInstr::Pull{n.name});
             auto l = fresh_label();
             instrs.emplace_back(HInstr::JumpFalse{l});
@@ -109,7 +140,24 @@ void Compiler::compile(NodeId id) {
             instrs.emplace_back(HInstr::Label{l});
             instrs.emplace_back(HInstr::Term{});
           },
-          [&](const Signal &n) { assert(false && "TODO: Signal"); },
+          [&](const Signal &n) {
+            instrs.emplace_back(HInstr::VertLabel{n.name});
+            compile(n.init);
+            instrs.emplace_back(HInstr::Store{n.name});
+            instrs.emplace_back(HInstr::Pull{n.name});
+            auto l = fresh_label();
+            instrs.emplace_back(HInstr::JumpFalse{l});
+            if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
+              for (auto dep : it->second) {
+                instrs.emplace_back(
+                    HInstr::Mp{ast[dep].toplevel_name(),
+                               static_cast<std::uint16_t>(ranks.at(dep))});
+              }
+            }
+            instrs.emplace_back(HInstr::Dispatch{n.name});
+            instrs.emplace_back(HInstr::Label{l});
+            instrs.emplace_back(HInstr::Term{});
+          },
           [&](const Extern &n) {
             if (!n.pure) {
               if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
@@ -123,7 +171,24 @@ void Compiler::compile(NodeId id) {
           },
           [&](const Function &n) {}, // N/A here
           [&](const Error &n) { assert(false && "TODO: Unreachable?"); },
-          [&](const Inline &n) { assert(false && "TODO: Inline"); },
+          [&](const Inline &n) {
+            for (auto par : n.params | std::ranges::views::reverse) {
+              compile(par);
+            }
+            for (auto name : n.names) {
+              instrs.emplace_back(
+                  HInstr::Comment{std::format("push local {}", name)});
+              instrs.emplace_back(HInstr::PushLocal{});
+              locals.push_back(name);
+            }
+            compile(n.formula);
+            for (auto name : n.names) {
+              instrs.emplace_back(
+                  HInstr::Comment{std::format("pop local {}", name)});
+              instrs.emplace_back(HInstr::PopLocal{});
+              locals.pop_back();
+            }
+          },
       },
       ast[id].data);
 }
@@ -197,6 +262,10 @@ std::string const_show(const HInstr::Const &c) {
 }
 
 std::string HInstr::show() const {
+  if (auto com = std::get_if<Comment>(&data)) {
+    return std::format("# {}", com->message);
+  }
+
   std::string_view tag;
 #define X(N, I)                                                                \
   I(std::holds_alternative<N>(data)) { tag = #N; }
@@ -223,6 +292,7 @@ std::string HInstr::show() const {
     [](const Mp& n) -> std::string { return std::format("[{}], {}", n.vert, n.rank); },
     [](const VertLabel& n) -> std::string { return std::format("[{}]", n.vert); },
     [](const Pull& n) -> std::string { return std::format("[{}]", n.glob); },
+    [](const Dispatch& n) -> std::string { return std::format("[{}]", n.glob); },
     [](auto&&) -> std::string { return ""; }
   }, data);
   // clang-format on

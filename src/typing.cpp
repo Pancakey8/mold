@@ -205,16 +205,19 @@ NodeId Typing::infer(NodeId id) {
               if (fn->params.size() != n.params.size())
                 assert(false && "TODO: Error handling");
               std::vector<NodeId> params{};
+              std::vector<std::string_view> names{};
               for (auto p : n.params) {
                 params.push_back(infer(p));
               }
               for (std::size_t i = 0; i < params.size(); ++i) {
+                names.push_back(fn->params[i]);
                 locals.push_back({fn->params[i], inferred[params[i].id]});
               }
               auto form = infer(fn->init);
               locals.resize(locals.size() - params.size());
-              return push_node(Inline{n.name, std::move(params), form},
-                               ast[id].source, inferred[form.id]);
+              return push_node(
+                  Inline{std::move(names), std::move(params), form},
+                  ast[id].source, inferred[form.id]);
             } else if (sigs.contains(n.name)) {
               const auto &sig = sigs.at(n.name);
               if (sig.params.size() != n.params.size())
@@ -653,9 +656,9 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
           },
           [&](const Error &n) { return std::format("msg={}", n.msg); },
           [&](const Inline &n) {
-            return std::format("callee={}, formula={}, params={}", n.callee,
-                               node_str(n.formula, pool),
-                               node_vec_str(n.params, pool));
+            return std::format(
+                "names={}, formula={}, params={}", string_vec_str(n.names),
+                node_str(n.formula, pool), node_vec_str(n.params, pool));
           }},
       data);
 

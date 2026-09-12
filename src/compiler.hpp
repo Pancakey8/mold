@@ -54,6 +54,8 @@ enum class Op : std::uint8_t {
   MP,
   // Check if a formula is alive or dead
   PULL,
+  // Dispatch event
+  DISPATCH,
   // Terminate current cursor
   TERM
 };
@@ -69,7 +71,9 @@ struct Instr {
 
 #define HINSTR_KIND_LIST(FIRST, REST)                                          \
   FIRST(Upcast)                                                                \
+  REST(Comment)                                                                \
   REST(Term)                                                                   \
+  REST(Dispatch)                                                               \
   REST(Pull)                                                                   \
   REST(VertLabel)                                                              \
   REST(Mp)                                                                     \
@@ -79,7 +83,7 @@ struct Instr {
   REST(Label)                                                                  \
   REST(Jump)                                                                   \
   REST(JumpTrue)                                                               \
-  REST(JumpFalse)                                                               \
+  REST(JumpFalse)                                                              \
   REST(Coal)                                                                   \
   REST(Mod)                                                                    \
   REST(Div)                                                                    \
@@ -188,7 +192,7 @@ struct HInstr {
 
   struct LoadAt {
     GlobId glob;
-    std::uint32_t depth;
+    std::uint16_t depth;
   };
 
   struct Call {
@@ -214,14 +218,19 @@ struct HInstr {
     GlobId glob;
   };
 
+  struct Dispatch {
+    GlobId glob;
+  };
+
   struct Term {};
 
+  struct Comment { std::string message; };
+
   struct Upcast {};
-  
+
 #define F(T) T
 #define R(T) , T
-  using Var =
-      std::variant<HINSTR_KIND_LIST(F, R)>;
+  using Var = std::variant<HINSTR_KIND_LIST(F, R)>;
 #undef F
 #undef R
 
@@ -232,7 +241,8 @@ struct HInstr {
 
 class Compiler {
 public:
-  Compiler(const TypedAST &ast, const SortResult &sorting) : ast(ast), sorting(sorting) {}
+  Compiler(const TypedAST &ast, const SortResult &sorting)
+      : ast(ast), sorting(sorting) {}
 
   void run();
 

@@ -10,7 +10,7 @@
   R(Inline)
 
 struct Inline {
-  std::string_view callee;
+  std::vector<std::string_view> names;
   std::vector<NodeId> params;
   NodeId formula;
 };
