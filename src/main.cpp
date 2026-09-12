@@ -6,6 +6,7 @@
 #include "ranking.hpp"
 #include "sort.hpp"
 #include "typing.hpp"
+#include "utils.hpp"
 #include <iostream>
 #include <print>
 
@@ -56,6 +57,18 @@ int main() {
 
   std::println("==Compiler==\n");
   Compiler comp{typed, typed_sort};
-  comp.run();
+  auto prog = comp.run();
+  std::println("Consts:");
+  for (std::size_t i = 0; i < prog.consts.size(); ++i) {
+    auto repr = std::visit(
+        overload{[](std::monostate) -> std::string { return "null"; },
+                 [](auto &&v) -> std::string { return std::format("{}", v); }},
+        prog.consts[i]);
+    std::println("  #{} => {}", i, repr);
+  }
+  std::println("Low IR:");
+  for (auto instr : prog.instrs) {
+    std::println("{}", instr.show());
+  }
   std::println("\n==Compiler==");
 }

@@ -9,55 +9,47 @@
 #include <variant>
 #include <vector>
 
+#define OP_LIST(X)                                                             \
+  X(UPCAST)                                                                    \
+  X(TERM)                                                                      \
+  X(DISPATCH)                                                                  \
+  X(PULL)                                                                      \
+  X(MP)                                                                        \
+  X(CTOR)                                                                      \
+  X(CALL)                                                                      \
+  X(LOAD_AT)                                                                   \
+  X(JUMP)                                                                      \
+  X(JUMP_TRUE)                                                                 \
+  X(JUMP_FALSE)                                                                \
+  X(COAL)                                                                      \
+  X(MOD)                                                                       \
+  X(DIV)                                                                       \
+  X(MULT)                                                                      \
+  X(SUB)                                                                       \
+  X(ADD)                                                                       \
+  X(SHR)                                                                       \
+  X(SHL)                                                                       \
+  X(GE)                                                                        \
+  X(LE)                                                                        \
+  X(GT)                                                                        \
+  X(LT)                                                                        \
+  X(NEQ)                                                                       \
+  X(EQ)                                                                        \
+  X(BIT_OR)                                                                    \
+  X(BIT_AND)                                                                   \
+  X(OR)                                                                        \
+  X(AND)                                                                       \
+  X(POP_LOCAL)                                                                 \
+  X(PUSH_LOCAL)                                                                \
+  X(LOCAL)                                                                     \
+  X(STORE)                                                                     \
+  X(LOAD)                                                                      \
+  X(CONST)
+
 enum class Op : std::uint8_t {
-  // Load constant from table.
-  CONST,
-  // Load formula value
-  LOAD,
-  // Store to formula, mark formula as live.
-  STORE,
-  // Load local value
-  LOCAL,
-  // Push to local binding
-  PUSH_LOCAL,
-  // Pop local binding
-  POP_LOCAL,
-  // Operators
-  AND,
-  OR,
-  BITAND,
-  BITOR,
-  EQ,
-  NEQ,
-  LT,
-  GT,
-  LE,
-  GE,
-  SHL,
-  SHR,
-  ADD,
-  SUB,
-  MULT,
-  DIV,
-  MOD,
-  COAL,
-  // Jump true (offset)
-  JT,
-  // Load formula at depth (offset of tick)
-  LOAD_AT,
-  // Invoke FFI
-  CALL,
-  // Construct object of ID (only Events for now)
-  CTOR,
-  // Multiply, push new `ip` at rank N to deduplicating prio queue
-  // of cursors
-  MP,
-  // Check if a formula is alive or dead
-  PULL,
-  // Dispatch event
-  DISPATCH,
-  // Terminate current cursor
-  TERM
+#define X(T) T,
+  OP_LIST(X)
+#undef X
 };
 
 struct Instr {
@@ -67,6 +59,16 @@ struct Instr {
   } arg;
   std::uint16_t ext;
   Op kind;
+
+  Instr(Op op) : arg{}, ext{}, kind{op} {}
+  Instr(Op op, std::int32_t arg) : arg{.i = arg}, ext{}, kind{op} {}
+  Instr(Op op, std::uint32_t arg) : arg{.u = arg}, ext{}, kind{op} {}
+  Instr(Op op, std::int32_t arg, std::uint16_t ext)
+      : arg{.i = arg}, ext{ext}, kind{op} {}
+  Instr(Op op, std::uint32_t arg, std::uint16_t ext)
+      : arg{.u = arg}, ext{ext}, kind{op} {}
+
+  std::string show();
 };
 
 #define HINSTR_KIND_LIST(FIRST, REST)                                          \
@@ -109,6 +111,9 @@ struct Instr {
   REST(Load)                                                                   \
   REST(Const)
 
+using ConstVal =
+    std::variant<std::int64_t, double, bool, std::string_view, std::monostate>;
+
 struct HInstr {
   using GlobId = std::string_view;
   using LocId = std::uint32_t;
@@ -118,8 +123,7 @@ struct HInstr {
   using VertId = std::string_view;
 
   struct Const {
-    std::variant<std::int64_t, double, bool, std::string_view, std::monostate>
-        val;
+    ConstVal val;
   };
 
   struct Load {
@@ -224,7 +228,9 @@ struct HInstr {
 
   struct Term {};
 
-  struct Comment { std::string message; };
+  struct Comment {
+    std::string message;
+  };
 
   struct Upcast {};
 
@@ -239,12 +245,17 @@ struct HInstr {
   std::string show() const;
 };
 
+struct Program {
+  std::vector<ConstVal> consts;
+  std::vector<Instr> instrs;
+};
+
 class Compiler {
 public:
   Compiler(const TypedAST &ast, const SortResult &sorting)
       : ast(ast), sorting(sorting) {}
 
-  void run();
+  Program run();
 
 private:
   const TypedAST &ast;
@@ -260,4 +271,36 @@ private:
 
   std::uint32_t labels{};
   std::uint32_t fresh_label();
+};
+
+struct HighToLow {
+public:
+  HighToLow(std::span<const HInstr> hi) : hi(hi) {}
+
+  Program run();
+
+private:
+  std::span<const HInstr> hi;
+  std::vector<Instr> lo{};
+
+  void lower(const HInstr &instr);
+
+  std::vector<HInstr::GlobId> globs{};
+  std::uint32_t glob_at(HInstr::GlobId id);
+
+  std::vector<HInstr::VertId> verts{};
+  std::vector<std::uint32_t> vert_fixups{};
+  std::flat_map<std::uint32_t, std::uint32_t> vert_labels{};
+  std::uint32_t vert_at(HInstr::VertId id);
+
+  std::vector<HInstr::EventId> events{};
+  std::uint32_t event_at(HInstr::EventId id);
+
+  std::vector<HInstr::ExtId> exts{};
+  std::uint32_t ext_at(HInstr::ExtId id);
+
+  std::vector<std::uint32_t> label_fixups{};
+  std::flat_map<std::uint32_t, std::uint32_t> labels{};
+
+  std::vector<ConstVal> consts{};
 };

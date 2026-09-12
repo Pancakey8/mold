@@ -10,7 +10,7 @@
 #include <ranges>
 #include <variant>
 
-void Compiler::run() {
+Program Compiler::run() {
   ranks = ranks_of(sorting);
 
   for (auto [id, r] : ranks) {
@@ -27,6 +27,9 @@ void Compiler::run() {
   for (const auto &instr : instrs) {
     std::println("{}", instr.show());
   }
+
+  HighToLow conv{instrs};
+  return conv.run();
 }
 
 void Compiler::compile(NodeId id) {
@@ -38,7 +41,7 @@ void Compiler::compile(NodeId id) {
           [&](const LitString &n) {
             instrs.emplace_back(HInstr::Const{n.val});
           },
-          [&](const LitNull &n) {
+          [&](const LitNull &) {
             instrs.emplace_back(HInstr::Const{std::monostate()});
           },
           [&](const Ident &n) {
@@ -106,7 +109,7 @@ void Compiler::compile(NodeId id) {
                   n.name, static_cast<std::uint16_t>(n.params.size())});
             }
           },
-          [&](const TypeName &n) {}, // N/A here
+          [&](const TypeName &) {}, // N/A here
           [&](const Input &n) {
             instrs.emplace_back(HInstr::Comment{
                 std::format("in {} : {}", n.name, ast[n.type].type.show())});
@@ -169,8 +172,8 @@ void Compiler::compile(NodeId id) {
               }
             }
           },
-          [&](const Function &n) {}, // N/A here
-          [&](const Error &n) { assert(false && "TODO: Unreachable?"); },
+          [&](const Function &) {}, // N/A here
+          [&](const Error &) { assert(false && "TODO: Unreachable?"); },
           [&](const Inline &n) {
             for (auto par : n.params | std::ranges::views::reverse) {
               compile(par);
@@ -261,6 +264,133 @@ std::string const_show(const HInstr::Const &c) {
       c.val);
 }
 
+Program HighToLow::run() {
+  for (const auto &instr : hi) {
+    lower(instr);
+  }
+  for (auto i : vert_fixups) {
+    lo[i].arg.u = vert_labels.at(lo[i].arg.u);
+  }
+  for (auto i : label_fixups) {
+    lo[i].arg.i = labels.at(lo[i].arg.u) - i;
+  }
+  return {std::move(consts), std::move(lo)};
+}
+
+void HighToLow::lower(const HInstr &instr) {
+  std::visit(
+      overload{
+          [&](const HInstr::Upcast &) { lo.emplace_back(Op::UPCAST); },
+          [&](const HInstr::Comment &) {},
+          [&](const HInstr::Term &) { lo.emplace_back(Op::TERM); },
+          [&](const HInstr::Dispatch &i) {
+            lo.emplace_back(Op::DISPATCH, glob_at(i.glob));
+          },
+          [&](const HInstr::Pull &i) {
+            lo.emplace_back(Op::PULL, glob_at(i.glob));
+          },
+          [&](const HInstr::VertLabel &i) {
+            vert_labels[vert_at(i.vert)] = lo.size();
+          },
+          [&](const HInstr::Mp &i) {
+            lo.emplace_back(Op::MP, vert_at(i.vert), i.rank);
+            vert_fixups.push_back(lo.size() - 1);
+          },
+          [&](const HInstr::Ctor &i) {
+            lo.emplace_back(Op::CTOR, event_at(i.fn), i.argc);
+          },
+          [&](const HInstr::Call &i) {
+            lo.emplace_back(Op::CTOR, ext_at(i.fn), i.argc);
+          },
+          [&](const HInstr::LoadAt &i) {
+            lo.emplace_back(Op::LOAD_AT, glob_at(i.glob), i.depth);
+          },
+          [&](const HInstr::Label &i) { labels[i.label] = lo.size(); },
+          [&](const HInstr::Jump &i) {
+            lo.emplace_back(Op::JUMP, i.label);
+            label_fixups.push_back(lo.size() - 1);
+          },
+          [&](const HInstr::JumpTrue &i) {
+            lo.emplace_back(Op::JUMP_TRUE, i.label);
+            label_fixups.push_back(lo.size() - 1);
+          },
+          [&](const HInstr::JumpFalse &i) {
+            lo.emplace_back(Op::JUMP_FALSE, i.label);
+            label_fixups.push_back(lo.size() - 1);
+          },
+          [&](const HInstr::Coal &) { lo.emplace_back(Op::COAL); },
+          [&](const HInstr::Mod &) { lo.emplace_back(Op::MOD); },
+          [&](const HInstr::Div &) { lo.emplace_back(Op::DIV); },
+          [&](const HInstr::Mult &) { lo.emplace_back(Op::MULT); },
+          [&](const HInstr::Sub &) { lo.emplace_back(Op::SUB); },
+          [&](const HInstr::Add &) { lo.emplace_back(Op::ADD); },
+          [&](const HInstr::Shr &) { lo.emplace_back(Op::SHR); },
+          [&](const HInstr::Shl &) { lo.emplace_back(Op::SHL); },
+          [&](const HInstr::Ge &) { lo.emplace_back(Op::GE); },
+          [&](const HInstr::Le &) { lo.emplace_back(Op::LE); },
+          [&](const HInstr::Gt &) { lo.emplace_back(Op::GT); },
+          [&](const HInstr::Lt &) { lo.emplace_back(Op::LT); },
+          [&](const HInstr::Neq &) { lo.emplace_back(Op::NEQ); },
+          [&](const HInstr::Eq &) { lo.emplace_back(Op::EQ); },
+          [&](const HInstr::BitOr &) { lo.emplace_back(Op::BIT_OR); },
+          [&](const HInstr::BitAnd &) { lo.emplace_back(Op::BIT_AND); },
+          [&](const HInstr::Or &) { lo.emplace_back(Op::OR); },
+          [&](const HInstr::And &) { lo.emplace_back(Op::AND); },
+          [&](const HInstr::PopLocal &) { lo.emplace_back(Op::POP_LOCAL); },
+          [&](const HInstr::PushLocal &) { lo.emplace_back(Op::PUSH_LOCAL); },
+          [&](const HInstr::Local &i) { lo.emplace_back(Op::LOCAL, i.loc); },
+          [&](const HInstr::Store &i) {
+            lo.emplace_back(Op::STORE, glob_at(i.glob));
+          },
+          [&](const HInstr::Load &i) {
+            lo.emplace_back(Op::LOAD, glob_at(i.glob));
+          },
+          [&](const HInstr::Const &i) {
+            consts.push_back(i.val);
+            lo.emplace_back(Op::CONST,
+                            static_cast<std::uint32_t>(consts.size() - 1));
+          },
+      },
+      instr.data);
+}
+
+std::uint32_t HighToLow::glob_at(HInstr::GlobId id) {
+  if (auto it = std::find(globs.begin(), globs.end(), id); it != globs.end()) {
+    return std::distance(globs.begin(), it);
+  } else {
+    globs.push_back(id);
+    return globs.size() - 1;
+  }
+}
+
+std::uint32_t HighToLow::vert_at(HInstr::VertId id) {
+  if (auto it = std::find(verts.begin(), verts.end(), id); it != verts.end()) {
+    return std::distance(verts.begin(), it);
+  } else {
+    verts.push_back(id);
+    return verts.size() - 1;
+  }
+}
+
+std::uint32_t HighToLow::event_at(HInstr::EventId id) {
+  if (auto it = std::find(events.begin(), events.end(), id);
+      it != events.end()) {
+    return std::distance(events.begin(), it);
+  } else {
+    events.push_back(id);
+    return events.size() - 1;
+  }
+}
+
+std::uint32_t HighToLow::ext_at(HInstr::ExtId id) {
+  if (auto it = std::find(exts.begin(), exts.end(), id); it != exts.end()) {
+    return std::distance(exts.begin(), it);
+  } else {
+    exts.push_back(id);
+    return exts.size() - 1;
+  }
+}
+
 std::string HInstr::show() const {
   if (auto com = std::get_if<Comment>(&data)) {
     return std::format("# {}", com->message);
@@ -298,4 +428,18 @@ std::string HInstr::show() const {
   // clang-format on
 
   return std::format("{} {}", tag, d);
+}
+
+std::string Instr::show() {
+  std::string_view op_name;
+#define X(T)                                                                   \
+  case Op::T:                                                                  \
+    op_name = #T;                                                              \
+    break;
+  switch (kind) { OP_LIST(X) }
+#undef X
+  auto arg_u = std::bit_cast<std::uint32_t>(arg);
+  auto arg_i = std::bit_cast<std::int32_t>(arg);
+
+  return std::format("{} {}/{}, {}", op_name, arg_u, arg_i, ext);
 }
