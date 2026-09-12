@@ -7,12 +7,7 @@
 
 #define TYPED_NODE_KIND_LIST(F, R)                                             \
   NODE_KIND_LIST(F, R)                                                         \
-  R(Cast)                                                                      \
   R(Inline)
-
-struct Cast {
-  NodeId child;
-};
 
 struct Inline {
   std::string_view callee;
@@ -45,6 +40,10 @@ struct TypedNode {
   MoldType type;
 
   std::string show(const TypedNodePool &pool) const;
+
+  bool is_toplevel() const;
+
+  std::string_view toplevel_name() const;
 };
 
 class TypedNodePool {
@@ -153,3 +152,6 @@ private:
 
   NodeId infer(NodeId id);
 };
+
+
+SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped);

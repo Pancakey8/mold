@@ -1,15 +1,16 @@
 #include "typing.hpp"
 #include "ast.hpp"
+#include "sort.hpp"
 #include "utils.hpp"
+#include <flat_map>
+#include <flat_set>
 #include <format>
 
 TypedAST Typing::run() {
   std::vector<NodeId> tls{};
 
   for (auto id : sorting.order) {
-    if (!std::holds_alternative<Function>(ast[id].data)) {
-      tls.push_back(infer(id));
-    }
+    tls.push_back(infer(id));
   }
 
   propagate();
@@ -651,9 +652,6 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
                                node_str(n.init, pool));
           },
           [&](const Error &n) { return std::format("msg={}", n.msg); },
-          [&](const Cast &n) {
-            return std::format("child={}", node_str(n.child, pool));
-          },
           [&](const Inline &n) {
             return std::format("callee={}, formula={}, params={}", n.callee,
                                node_str(n.formula, pool),
@@ -662,4 +660,97 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
       data);
 
   return std::format("{}[{}]({})", tag, type.show(), fields);
+}
+
+bool TypedNode::is_toplevel() const {
+  return std::visit(
+      [](const auto &node) {
+        return Node::is_toplevel_v<std::decay_t<decltype(node)>>;
+      },
+      data);
+}
+
+std::string_view TypedNode::toplevel_name() const {
+  return std::visit(
+      [](const auto &node) -> std::string_view {
+        using T = std::decay_t<decltype(node)>;
+        if constexpr (Node::is_toplevel_v<T>) {
+          return node.name;
+        } else {
+          assert(false && "Name of non-top-level requested");
+        }
+      },
+      data);
+}
+
+std::flat_map<NodeId, std::vector<NodeId>>
+migrate_deps(const std::flat_map<NodeId, std::vector<NodeId>> &untyped_deps,
+             const std::flat_map<NodeId, NodeId> &sort_to_ty) {
+  std::flat_map<NodeId, std::vector<NodeId>> typed_deps;
+
+  for (const auto &[sid, tid] : sort_to_ty) {
+    std::vector<NodeId> targets;
+    std::vector<NodeId> stack;
+    std::flat_set<NodeId> visited;
+
+    if (auto it = untyped_deps.find(sid); it != untyped_deps.end()) {
+      for (auto nbor : it->second) {
+        stack.push_back(nbor);
+      }
+    }
+
+    while (!stack.empty()) {
+      auto curr = stack.back();
+      stack.pop_back();
+
+      if (!visited.insert(curr).second) {
+        continue;
+      }
+
+      if (sort_to_ty.contains(curr)) {
+        targets.push_back(sort_to_ty.at(curr));
+      } else {
+        if (auto it = untyped_deps.find(curr); it != untyped_deps.end()) {
+          for (auto neighbor : it->second) {
+            stack.push_back(neighbor);
+          }
+        }
+      }
+    }
+
+    std::sort(targets.begin(), targets.end());
+    targets.erase(std::unique(targets.begin(), targets.end()), targets.end());
+
+    if (!targets.empty()) {
+      typed_deps[tid] = std::move(targets);
+    }
+  }
+
+  return typed_deps;
+}
+
+SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped) {
+  std::flat_map<NodeId, NodeId> sort_to_ty{};
+
+  for (std::size_t i = 0; i < ast.tls.size(); ++i) {
+    if (ast.tls[i] == NODEID_NONE)
+      continue;
+    sort_to_ty[untyped.order[i]] = ast.tls[i];
+  }
+
+  SortResult typed{};
+  for (auto [name, sid] : untyped.tls_names) {
+    if (sort_to_ty.contains(sid))
+      typed.tls_names[name] = sort_to_ty.at(sid);
+  }
+
+  typed.order.reserve(untyped.order.size());
+  for (auto sid : untyped.order) {
+    if (sort_to_ty.contains(sid))
+      typed.order.push_back(sort_to_ty.at(sid));
+  }
+
+  typed.deps = migrate_deps(untyped.deps, sort_to_ty);
+
+  return typed;
 }

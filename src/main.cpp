@@ -1,7 +1,9 @@
 #include "ast.hpp"
+#include "compiler.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "purity.hpp"
+#include "ranking.hpp"
 #include "sort.hpp"
 #include "typing.hpp"
 #include <iostream>
@@ -42,7 +44,18 @@ int main() {
   auto typed = typing.run();
 
   for (auto tl : typed.tls) {
-    std::println("{}", typed[tl].show(typed.pool));
+    if (tl != NODEID_NONE)
+      std::println("{}", typed[tl].show(typed.pool));
   }
+  auto typed_sort = migrate_sort(typed, sorted);
+  std::println("TLs={}\nGraph={}\nOrder={}", typed_sort.tls_names,
+               typed_sort.deps, typed_sort.order);
+  auto ranks = ranks_of(typed_sort);
+  std::println("Ranks={}", ranks);
   std::println("\n==Typing==");
+
+  std::println("==Compiler==\n");
+  Compiler comp{typed, typed_sort};
+  comp.run();
+  std::println("\n==Compiler==");
 }

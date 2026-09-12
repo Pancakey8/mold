@@ -2,7 +2,7 @@
 #include "ast.hpp"
 #include <cstddef>
 
-std::vector<NodeId>
+std::vector<std::string_view>
 impure_fns(const AST &ast, const std::vector<NodeId> &order,
            const std::flat_map<NodeId, std::vector<NodeId>> &deps) {
   std::vector<bool> is_impure(ast.size(), false);
@@ -23,10 +23,10 @@ impure_fns(const AST &ast, const std::vector<NodeId> &order,
     }
   }
 
-  std::vector<NodeId> impures;
+  std::vector<std::string_view> impures;
   for (auto id : order) {
     if (is_impure[id.id]) {
-      impures.push_back(id);
+      impures.push_back(ast[id].toplevel_name());
     }
   }
 
