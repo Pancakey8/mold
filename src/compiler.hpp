@@ -4,6 +4,7 @@
 #include "sort.hpp"
 #include "typing.hpp"
 #include <cstdint>
+#include <flat_set>
 #include <string_view>
 #include <unordered_set>
 #include <variant>
@@ -245,9 +246,27 @@ struct HInstr {
   std::string show() const;
 };
 
+struct TransparentStringHash {
+  using is_transparent = void;
+
+  std::size_t operator()(std::string_view sv) const noexcept {
+    return std::hash<std::string_view>{}(sv);
+  }
+  std::size_t operator()(const std::string &s) const noexcept {
+    return std::hash<std::string>{}(s);
+  }
+  std::size_t operator()(const char *s) const noexcept {
+    return std::hash<std::string_view>{}(s);
+  }
+};
+
 struct Program {
   std::vector<ConstVal> consts;
   std::vector<Instr> instrs;
+  std::uint32_t glob_size;
+  std::unordered_map<std::string, std::uint32_t, TransparentStringHash,
+                     std::equal_to<void>>
+      inputs;
 };
 
 class Compiler {
@@ -275,12 +294,15 @@ private:
 
 struct HighToLow {
 public:
-  HighToLow(std::span<const HInstr> hi) : hi(hi) {}
+  HighToLow(std::span<const HInstr> hi,
+            const std::flat_set<HInstr::GlobId> &inputs)
+      : hi(hi), inputs(inputs) {}
 
   Program run();
 
 private:
   std::span<const HInstr> hi;
+  const std::flat_set<HInstr::GlobId> &inputs;
   std::vector<Instr> lo{};
 
   void lower(const HInstr &instr);

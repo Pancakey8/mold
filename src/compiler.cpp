@@ -28,7 +28,13 @@ Program Compiler::run() {
     std::println("{}", instr.show());
   }
 
-  HighToLow conv{instrs};
+  std::flat_set<HInstr::GlobId> inputs{};
+  for (auto tl : ast.tls) {
+    if (std::holds_alternative<Input>(ast[tl].data))
+      inputs.insert(ast[tl].toplevel_name());
+  }
+
+  HighToLow conv{instrs, inputs};
   return conv.run();
 }
 
@@ -271,13 +277,26 @@ Program HighToLow::run() {
   for (const auto &instr : hi) {
     lower(instr);
   }
+
   for (auto i : vert_fixups) {
     lo[i].arg.u = vert_labels.at(lo[i].arg.u);
   }
+
   for (auto i : label_fixups) {
     lo[i].arg.i = labels.at(lo[i].arg.u) - i;
   }
-  return {std::move(consts), std::move(lo)};
+
+  Program prog{std::move(consts),
+               std::move(lo),
+               static_cast<std::uint32_t>(globs.size()),
+               {}};
+
+  for (auto i : globs) {
+    if (inputs.contains(i))
+      prog.inputs[std::string{i}] = glob_at(i);
+  }
+
+  return prog;
 }
 
 void HighToLow::lower(const HInstr &instr) {

@@ -1,8 +1,8 @@
 #include "ast.hpp"
 #include "compiler.hpp"
+#include "interpreter.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
-#include "purity.hpp"
 #include "ranking.hpp"
 #include "sort.hpp"
 #include "typing.hpp"
@@ -37,9 +37,6 @@ int main() {
   std::println("TLs={}\nGraph={}\nOrder={}", sorted.tls_names, sorted.deps,
                sorted.order);
 
-  auto impures = impure_fns(ast, sorted.order, sorted.deps);
-  std::println("Impures={}", impures);
-
   std::println("==Typing==\n");
   Typing typing{ast, sorted};
   auto typed = typing.run();
@@ -71,4 +68,9 @@ int main() {
     std::println("{}", instr.show());
   }
   std::println("\n==Compiler==");
+
+  std::println("==Interpreter==\n");
+  Interpreter interp{prog};
+  interp.tick(TickParam{"x", InternValue::of_string("hello")});
+  std::println("\n==Interpreter==");
 }

@@ -1,4 +1,4 @@
-SRCS := src/main.cpp src/sort.cpp src/lexer.cpp src/parser.cpp src/ast.cpp src/purity.cpp src/typing.cpp src/compiler.cpp src/ranking.cpp
+SRCS := src/main.cpp src/sort.cpp src/lexer.cpp src/parser.cpp src/ast.cpp src/typing.cpp src/compiler.cpp src/ranking.cpp src/interpreter.cpp
 OBJS := $(SRCS:%.cpp=%.o)
 
 .PHONY: all
