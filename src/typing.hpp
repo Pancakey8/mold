@@ -15,7 +15,8 @@ struct Inline {
   NodeId formula;
 };
 
-#define TYPE_BASE_LIST(X) X(INT) X(REAL) X(BOOL) X(STRING) X(DATE) X(TIME) X(EVENT)
+#define TYPE_BASE_LIST(X)                                                      \
+  X(INT) X(REAL) X(BOOL) X(STRING) X(DATE) X(TIME) X(EVENT)
 
 struct MoldType {
 #define X(T) T,
@@ -68,6 +69,7 @@ private:
 struct TypedAST {
   TypedNodePool pool;
   std::vector<NodeId> tls;
+  std::flat_map<NodeId, MoldType::Base> casts;
 
   TypedNode &operator[](NodeId id) { return pool[id]; }
   const TypedNode &operator[](NodeId id) const { return pool[id]; }
@@ -99,9 +101,16 @@ struct InternType {
   }
 };
 
+struct TypeMatch {
+  MoldType::Base base;
+  bool nullable;
+  std::optional<MoldType::Base> cast_target = std::nullopt;
+};
+
 struct Constraint {
+  std::vector<NodeId> nodes;
   std::vector<InternType> vars;
-  std::vector<std::vector<MoldType>> cases;
+  std::vector<std::vector<TypeMatch>> cases;
 };
 
 struct Signature {
@@ -125,6 +134,7 @@ private:
   std::vector<std::pair<std::string_view, InternType>> locals{};
   std::unordered_map<std::string_view, InternType> globals{};
   std::unordered_map<std::string_view, Signature> sigs{};
+  std::flat_map<NodeId, MoldType::Base> casts{};
 
   std::vector<InternType> inferred{};
   TypedNodePool pool{};
@@ -134,7 +144,7 @@ private:
   [[nodiscard]]
   bool unify(InternType a, InternType b);
 
-  InternType join(InternType a, InternType b);
+  InternType join(NodeId l, NodeId r, InternType a, InternType b);
 
   bool compatible(InternType have, MoldType exp);
 
@@ -148,10 +158,9 @@ private:
 
   InternType lookup(std::string_view name);
 
-  bool assignable(InternType arg, InternType param);
+  bool assignable(NodeId arg_id, InternType arg, InternType param);
 
   NodeId infer(NodeId id);
 };
-
 
 SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped);

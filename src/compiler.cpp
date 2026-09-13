@@ -194,6 +194,9 @@ void Compiler::compile(NodeId id) {
           },
       },
       ast[id].data);
+  if (ast.casts.contains(id)) {
+    instrs.emplace_back(HInstr::Upcast{});
+  }
 }
 
 void Compiler::compile_binop(BinaryOp::Kind id) {

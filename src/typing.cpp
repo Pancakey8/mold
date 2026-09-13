@@ -5,6 +5,7 @@
 #include <flat_map>
 #include <flat_set>
 #include <format>
+#include <print>
 
 TypedAST Typing::run() {
   std::vector<NodeId> tls{};
@@ -19,7 +20,7 @@ TypedAST Typing::run() {
     pool[id].type = to_mold_type(inferred[id.id]);
   }
 
-  return {std::move(pool), std::move(tls)};
+  return {std::move(pool), std::move(tls), std::move(casts)};
 }
 
 NodeId Typing::infer(NodeId id) {
@@ -76,7 +77,7 @@ NodeId Typing::infer(NodeId id) {
             } break;
             case BinaryOp::EQ:
             case BinaryOp::NEQ: {
-              join(ty_l, ty_r);
+              join(l, r, ty_l, ty_r);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::BOOL));
             } break;
@@ -86,16 +87,17 @@ NodeId Typing::infer(NodeId id) {
             case BinaryOp::GE: {
               // clang-format off
               Constraint c {
+                .nodes = {l, r, NODEID_NONE},
                 .vars = {ty_l, ty_r},
                 .cases = {
                   {{MoldType::INT, ty_l.nullable},
                    {MoldType::INT, ty_r.nullable}},
                   {{MoldType::REAL, ty_l.nullable},
                    {MoldType::REAL, ty_r.nullable}},
-                  {{MoldType::INT, ty_l.nullable},
+                  {{MoldType::INT, ty_l.nullable, MoldType::REAL},
                    {MoldType::REAL, ty_r.nullable}},
                   {{MoldType::REAL, ty_l.nullable},
-                   {MoldType::INT, ty_r.nullable}},
+                   {MoldType::INT, ty_r.nullable, MoldType::REAL}},
                   {{MoldType::DATE, ty_l.nullable},
                    {MoldType::DATE, ty_r.nullable}},
                   {{MoldType::TIME, ty_l.nullable},
@@ -115,6 +117,7 @@ NodeId Typing::infer(NodeId id) {
               auto res = InternType::var(fresh(), nullable);
               // clang-format off
               Constraint c {
+                .nodes = {l, r, NODEID_NONE},
                 .vars = {ty_l, ty_r, res},
                 .cases = {
                   {{MoldType::INT, ty_l.nullable},
@@ -123,11 +126,11 @@ NodeId Typing::infer(NodeId id) {
                   {{MoldType::REAL, ty_l.nullable},
                    {MoldType::REAL, ty_r.nullable},
                    {MoldType::REAL, nullable}},
-                  {{MoldType::INT, ty_l.nullable},
+                  {{MoldType::INT, ty_l.nullable, MoldType::REAL},
                    {MoldType::REAL, ty_r.nullable},
                    {MoldType::REAL, nullable}},
                   {{MoldType::REAL, ty_l.nullable},
-                   {MoldType::INT, ty_r.nullable},
+                   {MoldType::INT, ty_r.nullable, MoldType::REAL},
                    {MoldType::REAL, nullable}},
                 }
               };
@@ -158,7 +161,7 @@ NodeId Typing::infer(NodeId id) {
               if (!ty_l.nullable) {
                 assert(false && "TODO: Error handling");
               }
-              auto res = join(ty_l, ty_r);
+              auto res = join(l, r, ty_l, ty_r);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
             } break;
             }
@@ -186,7 +189,7 @@ NodeId Typing::infer(NodeId id) {
             if (n.fals != NODEID_NONE) {
               fals = infer(n.fals);
               auto ty_fals = inferred[fals.id];
-              ty_res = join(ty_tru, ty_fals);
+              ty_res = join(tru, fals, ty_tru, ty_fals);
             } else {
               ty_res.nullable = true;
             }
@@ -225,7 +228,7 @@ NodeId Typing::infer(NodeId id) {
               std::vector<NodeId> params{};
               for (std::size_t i = 0; i < n.params.size(); ++i) {
                 auto p = infer(n.params[i]);
-                if (!assignable(inferred[p.id], sig.params[i]))
+                if (!assignable(p, inferred[p.id], sig.params[i]))
                   assert(false && "TODO: Error handling");
                 params.push_back(p);
               }
@@ -392,19 +395,21 @@ bool Typing::unify(InternType a, InternType b) {
   return true;
 }
 
-InternType Typing::join(InternType a, InternType b) {
+InternType Typing::join(NodeId l, NodeId r, InternType a, InternType b) {
   auto res = InternType::var(fresh(), a.nullable || b.nullable);
 #define X(T)                                                                   \
   {{MoldType::T, a.nullable},                                                  \
    {MoldType::T, b.nullable},                                                  \
    {MoldType::T, a.nullable || b.nullable}},
-  Constraint c{.vars = {a, b, res}, .cases = {TYPE_BASE_LIST(X)}};
+  Constraint c{.nodes = {l, r, NODEID_NONE},
+               .vars = {a, b, res},
+               .cases = {TYPE_BASE_LIST(X)}};
 #undef X
-  c.cases.push_back({{MoldType::INT, a.nullable},
+  c.cases.push_back({{MoldType::INT, a.nullable, MoldType::REAL},
                      {MoldType::REAL, b.nullable},
                      {MoldType::REAL, a.nullable || b.nullable}});
   c.cases.push_back({{MoldType::REAL, a.nullable},
-                     {MoldType::INT, b.nullable},
+                     {MoldType::INT, b.nullable, MoldType::REAL},
                      {MoldType::REAL, a.nullable || b.nullable}});
   ctrs.push_back(std::move(c));
   propagate();
@@ -436,7 +441,7 @@ void Typing::propagate() {
     for (auto &c : ctrs) {
       auto e = std::erase_if(c.cases, [&](const auto &alt) -> bool {
         for (std::uint32_t i = 0; i < c.vars.size(); ++i) {
-          if (!compatible(c.vars[i], alt[i]))
+          if (!compatible(c.vars[i], {alt[i].base, alt[i].nullable}))
             return true;
         }
 
@@ -452,6 +457,9 @@ void Typing::propagate() {
           if (!unify(c.vars[i],
                      InternType::concrete(tys[i].base, tys[i].nullable))) {
             assert(false && "TODO: Error handling");
+          }
+          if (tys[i].cast_target) {
+            casts[c.nodes[i]] = *tys[i].cast_target;
           }
         }
       }
@@ -509,12 +517,14 @@ InternType Typing::lookup(std::string_view var) {
   return v;
 }
 
-bool Typing::assignable(InternType arg, InternType param) {
+bool Typing::assignable(NodeId arg_id, InternType arg, InternType param) {
   if (unify(arg, param))
     return true;
   auto ab = get_base(arg), pb = get_base(param);
-  if (ab && pb && *ab == MoldType::INT && *pb == MoldType::REAL)
+  if (ab && pb && *ab == MoldType::INT && *pb == MoldType::REAL) {
+    casts[arg_id] = MoldType::REAL;
     return unify(arg, InternType::concrete(MoldType::INT, arg.nullable));
+  }
   return false;
 }
 
