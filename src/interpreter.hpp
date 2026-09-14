@@ -6,6 +6,8 @@
 #include <stack>
 #include <variant>
 
+namespace mold::internal {
+
 struct InternString {
   std::uint32_t rc;
   std::size_t len;
@@ -35,7 +37,7 @@ struct InternValue {
   void dec();
   void destroy();
 
-  bool operator==(const InternValue& other) const;
+  bool operator==(const InternValue &other) const;
 };
 
 struct IPQueue {
@@ -55,14 +57,14 @@ private:
 };
 
 struct TickParam {
-  std::string_view name;
+  std::uint32_t id;
   InternValue value;
 };
 
 class Interpreter {
 public:
   Interpreter(const Interpreter &) = delete;
-  Interpreter(Interpreter &&) = delete;
+  Interpreter(Interpreter &&) = default;
   Interpreter &operator=(const Interpreter &) = delete;
   Interpreter &operator=(Interpreter &&) = delete;
 
@@ -70,8 +72,13 @@ public:
 
   ~Interpreter();
 
-  template <typename... Args> void tick(Args &&...args) {
-    (set_input(args.name, args.value), ...);
+  void feed(std::uint32_t id, InternValue val) { store(id, val); }
+  InternValue read(std::uint32_t id) {
+    vals[id].inc();
+    return vals[id];
+  }
+
+  void tick() {
     run();
     cleanup();
   }
@@ -92,5 +99,7 @@ private:
 
   void cleanup();
 
-  void set_input(std::string_view name, InternValue value);
+  void store(std::uint32_t id, InternValue value);
 };
+
+} // namespace mold::internal

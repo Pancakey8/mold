@@ -5,6 +5,8 @@
 #include <optional>
 #include <unordered_map>
 
+namespace mold::internal {
+
 #define TYPED_NODE_KIND_LIST(F, R)                                             \
   NODE_KIND_LIST(F, R)                                                         \
   R(Inline)
@@ -164,3 +166,5 @@ private:
 };
 
 SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped);
+
+}; // namespace mold::internal

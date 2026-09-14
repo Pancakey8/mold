@@ -4,14 +4,15 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <print>
 #include <variant>
+
+namespace mold::internal {
 
 std::vector<std::uint16_t> depths_of(const Program &prog);
 
 void Interpreter::init() {
-  vals.resize(prog.glob_size);
-  dirty.resize(prog.glob_size);
+  vals.resize(prog.var_count);
+  dirty.resize(prog.var_count);
   consts.reserve(prog.consts.size());
   for (const auto &c : prog.consts) {
     auto v = std::visit(
@@ -31,16 +32,12 @@ void Interpreter::init() {
   // TODO: History
 }
 
-void Interpreter::set_input(std::string_view name, InternValue value) {
-  if (auto it = prog.inputs.find(name); it != prog.inputs.end()) {
-    if (vals[it->second] != value) {
-      dirty[it->second] = true;
-    }
-    vals[it->second].dec();
-    vals[it->second] = value;
-  } else {
-    // TODO: Fail this?
+void Interpreter::store(std::uint32_t id, InternValue value) {
+  if (vals[id] != value) {
+    dirty[id] = true;
   }
+  vals[id].dec();
+  vals[id] = value;
 }
 
 void Interpreter::run() {
@@ -162,10 +159,7 @@ void Interpreter::run() {
     case Op::STORE: {
       auto v = stack.top();
       stack.pop();
-      if (vals[instr.arg.u] != v)
-        dirty[instr.arg.u] = true;
-      vals[instr.arg.u].dec();
-      vals[instr.arg.u] = v;
+      store(instr.arg.u, v);
       ip++;
     } break;
     case Op::LOAD: {
@@ -180,26 +174,27 @@ void Interpreter::run() {
       stack.push(v);
       ip++;
     } break;
-    case Op::DISPATCH:
-    case Op::CTOR:
-    case Op::CALL:
-    case Op::LOAD_AT:
-    case Op::MOD:
-    case Op::DIV:
-    case Op::MULT:
-    case Op::SUB:
-    case Op::SHR:
-    case Op::SHL:
-    case Op::GE:
-    case Op::LE:
-    case Op::GT:
-    case Op::LT:
-    case Op::NEQ:
-    case Op::BIT_OR:
-    case Op::BIT_AND:
-    case Op::OR:
-    case Op::AND:
-      break;
+      // clang-format off
+    case Op::DISPATCH: assert(false && "TODO: DISPATCH implement"); break;
+    case Op::CTOR: assert(false && "TODO: CTOR implement"); break;
+    case Op::CALL: assert(false && "TODO: CALL implement"); break;
+    case Op::LOAD_AT: assert(false && "TODO: LOAD implement"); break;
+    case Op::MOD: assert(false && "TODO: MOD implement"); break;
+    case Op::DIV: assert(false && "TODO: DIV implement"); break;
+    case Op::MULT: assert(false && "TODO: MULT implement"); break;
+    case Op::SUB: assert(false && "TODO: SUB implement"); break;
+    case Op::SHR: assert(false && "TODO: SHR implement"); break;
+    case Op::SHL: assert(false && "TODO: SHL implement"); break;
+    case Op::GE: assert(false && "TODO: GE implement"); break;
+    case Op::LE: assert(false && "TODO: LE implement"); break;
+    case Op::GT: assert(false && "TODO: GT implement"); break;
+    case Op::LT: assert(false && "TODO: LT implement"); break;
+    case Op::NEQ: assert(false && "TODO: NEQ implement"); break;
+    case Op::BIT_OR: assert(false && "TODO: BIT_OR implement"); break;
+    case Op::BIT_AND: assert(false && "TODO: BIT_AND implement"); break;
+    case Op::OR: assert(false && "TODO: OR implement"); break;
+    case Op::AND: assert(false && "TODO: AND implement"); break;
+      // clang-format on
     }
   }
 exit:
@@ -231,7 +226,7 @@ Interpreter::~Interpreter() {
 }
 
 std::vector<std::uint16_t> depths_of(const Program &prog) {
-  std::vector<std::uint16_t> depths(prog.glob_size, 0);
+  std::vector<std::uint16_t> depths(prog.var_count, 0);
 
   for (const auto &instr : prog.instrs) {
     if (instr.kind == Op::LOAD_AT) {
@@ -351,3 +346,5 @@ bool InternValue::operator==(const InternValue &other) const {
     return as_string() == other.as_string();
   }
 }
+
+}; // namespace mold::internal

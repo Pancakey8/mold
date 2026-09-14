@@ -1,6 +1,7 @@
 #include "ast.hpp"
 #include "utils.hpp"
 
+namespace mold::internal {
 bool Node::is_toplevel() const {
   return std::visit(
       [](const auto &node) {
@@ -147,3 +148,4 @@ std::string Node::show(const NodePool &pool) const {
 
   return std::format("{}({})", tag, fields);
 }
+}; // namespace foo::internal

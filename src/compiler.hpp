@@ -4,11 +4,12 @@
 #include "sort.hpp"
 #include "typing.hpp"
 #include <cstdint>
-#include <flat_set>
 #include <string_view>
 #include <unordered_set>
 #include <variant>
 #include <vector>
+
+namespace mold::internal {
 
 #define OP_LIST(X)                                                             \
   X(UPCAST)                                                                    \
@@ -246,27 +247,17 @@ struct HInstr {
   std::string show() const;
 };
 
-struct TransparentStringHash {
-  using is_transparent = void;
-
-  std::size_t operator()(std::string_view sv) const noexcept {
-    return std::hash<std::string_view>{}(sv);
-  }
-  std::size_t operator()(const std::string &s) const noexcept {
-    return std::hash<std::string>{}(s);
-  }
-  std::size_t operator()(const char *s) const noexcept {
-    return std::hash<std::string_view>{}(s);
-  }
-};
-
 struct Program {
   std::vector<ConstVal> consts;
   std::vector<Instr> instrs;
-  std::uint32_t glob_size;
-  std::unordered_map<std::string, std::uint32_t, TransparentStringHash,
-                     std::equal_to<void>>
-      inputs;
+  std::uint32_t var_count;
+};
+
+struct SymbolTable {
+  std::vector<HInstr::GlobId> globs{};
+  std::vector<HInstr::VertId> verts{};
+  std::vector<HInstr::EventId> events{};
+  std::vector<HInstr::ExtId> exts{};
 };
 
 class Compiler {
@@ -274,7 +265,7 @@ public:
   Compiler(const TypedAST &ast, const SortResult &sorting)
       : ast(ast), sorting(sorting) {}
 
-  Program run();
+  std::vector<HInstr> run();
 
 private:
   const TypedAST &ast;
@@ -294,35 +285,29 @@ private:
 
 struct HighToLow {
 public:
-  HighToLow(std::span<const HInstr> hi,
-            const std::flat_set<HInstr::GlobId> &inputs)
-      : hi(hi), inputs(inputs) {}
+  HighToLow(std::span<const HInstr> hi) : hi(hi) {}
 
-  Program run();
+  std::pair<Program, SymbolTable> run();
 
 private:
   std::span<const HInstr> hi;
-  const std::flat_set<HInstr::GlobId> &inputs;
   std::vector<Instr> lo{};
+  SymbolTable syms{};
 
   void lower(const HInstr &instr);
 
-  std::vector<HInstr::GlobId> globs{};
   std::uint32_t glob_at(HInstr::GlobId id);
+  std::uint32_t vert_at(HInstr::VertId id);
+  std::uint32_t event_at(HInstr::EventId id);
+  std::uint32_t ext_at(HInstr::ExtId id);
 
-  std::vector<HInstr::VertId> verts{};
   std::vector<std::uint32_t> vert_fixups{};
   std::flat_map<std::uint32_t, std::uint32_t> vert_labels{};
-  std::uint32_t vert_at(HInstr::VertId id);
-
-  std::vector<HInstr::EventId> events{};
-  std::uint32_t event_at(HInstr::EventId id);
-
-  std::vector<HInstr::ExtId> exts{};
-  std::uint32_t ext_at(HInstr::ExtId id);
 
   std::vector<std::uint32_t> label_fixups{};
   std::flat_map<std::uint32_t, std::uint32_t> labels{};
 
   std::vector<ConstVal> consts{};
 };
+
+} // namespace mold::internal

@@ -7,6 +7,8 @@
 #include <format>
 #include <vector>
 
+namespace mold::internal {
+
 struct NodeId {
   using Type = std::uint32_t;
 
@@ -21,17 +23,6 @@ struct NodeId {
 };
 
 constexpr NodeId NODEID_NONE{UINT32_MAX};
-
-template <> struct std::formatter<NodeId> {
-  constexpr auto parse(std::format_parse_context &ctx) const {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto format(const NodeId &id, FormatContext &ctx) const {
-    return std::format_to(ctx.out(), "Node({})", id.id);
-  }
-};
 
 struct LitInt {
   std::int64_t val;
@@ -78,7 +69,7 @@ struct Ident {
 struct BinaryOp {
   enum Kind {
 #define X(K) K,
-BINARYOP_KIND_LIST(X)
+    BINARYOP_KIND_LIST(X)
 #undef X
   } kind;
   NodeId left, right;
@@ -221,4 +212,16 @@ struct AST {
   NodeId begin() const { return pool.begin(); }
   NodeId end() const { return pool.end(); }
   NodeId::Type size() const { return pool.size(); }
+};
+}; // namespace mold::internal
+
+template <> struct std::formatter<mold::internal::NodeId> {
+  constexpr auto parse(std::format_parse_context &ctx) const {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const mold::internal::NodeId &id, FormatContext &ctx) const {
+    return std::format_to(ctx.out(), "Node({})", id.id);
+  }
 };

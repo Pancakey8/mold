@@ -6,11 +6,12 @@
 #include <cstddef>
 #include <flat_map>
 #include <format>
-#include <print>
 #include <ranges>
 #include <variant>
 
-Program Compiler::run() {
+namespace mold::internal {
+
+std::vector<HInstr> Compiler::run() {
   ranks = ranks_of(sorting);
 
   for (auto [id, r] : ranks) {
@@ -24,18 +25,7 @@ Program Compiler::run() {
       compile(id);
   }
 
-  for (const auto &instr : instrs) {
-    std::println("{}", instr.show());
-  }
-
-  std::flat_set<HInstr::GlobId> inputs{};
-  for (auto tl : ast.tls) {
-    if (std::holds_alternative<Input>(ast[tl].data))
-      inputs.insert(ast[tl].toplevel_name());
-  }
-
-  HighToLow conv{instrs, inputs};
-  return conv.run();
+  return std::move(instrs);
 }
 
 void Compiler::compile(NodeId id) {
@@ -273,7 +263,7 @@ std::string const_show(const HInstr::Const &c) {
       c.val);
 }
 
-Program HighToLow::run() {
+std::pair<Program, SymbolTable> HighToLow::run() {
   for (const auto &instr : hi) {
     lower(instr);
   }
@@ -286,17 +276,10 @@ Program HighToLow::run() {
     lo[i].arg.i = labels.at(lo[i].arg.u) - i;
   }
 
-  Program prog{std::move(consts),
-               std::move(lo),
-               static_cast<std::uint32_t>(globs.size()),
-               {}};
+  Program prog{std::move(consts), std::move(lo),
+               static_cast<std::uint32_t>(syms.globs.size())};
 
-  for (auto i : globs) {
-    if (inputs.contains(i))
-      prog.inputs[std::string{i}] = glob_at(i);
-  }
-
-  return prog;
+  return {std::move(prog), std::move(syms)};
 }
 
 void HighToLow::lower(const HInstr &instr) {
@@ -376,41 +359,28 @@ void HighToLow::lower(const HInstr &instr) {
       instr.data);
 }
 
-std::uint32_t HighToLow::glob_at(HInstr::GlobId id) {
-  if (auto it = std::find(globs.begin(), globs.end(), id); it != globs.end()) {
-    return std::distance(globs.begin(), it);
-  } else {
-    globs.push_back(id);
-    return globs.size() - 1;
+template <typename T> std::uint32_t get_or_insert(std::vector<T> &vec, T item) {
+  if (auto it = std::find(vec.begin(), vec.end(), item); it != vec.end()) {
+    return static_cast<std::uint32_t>(std::distance(vec.begin(), it));
   }
+  vec.push_back(item);
+  return static_cast<std::uint32_t>(vec.size() - 1);
+}
+
+std::uint32_t HighToLow::glob_at(HInstr::GlobId id) {
+  return get_or_insert(syms.globs, id);
 }
 
 std::uint32_t HighToLow::vert_at(HInstr::VertId id) {
-  if (auto it = std::find(verts.begin(), verts.end(), id); it != verts.end()) {
-    return std::distance(verts.begin(), it);
-  } else {
-    verts.push_back(id);
-    return verts.size() - 1;
-  }
+  return get_or_insert(syms.verts, id);
 }
 
 std::uint32_t HighToLow::event_at(HInstr::EventId id) {
-  if (auto it = std::find(events.begin(), events.end(), id);
-      it != events.end()) {
-    return std::distance(events.begin(), it);
-  } else {
-    events.push_back(id);
-    return events.size() - 1;
-  }
+  return get_or_insert(syms.events, id);
 }
 
 std::uint32_t HighToLow::ext_at(HInstr::ExtId id) {
-  if (auto it = std::find(exts.begin(), exts.end(), id); it != exts.end()) {
-    return std::distance(exts.begin(), it);
-  } else {
-    exts.push_back(id);
-    return exts.size() - 1;
-  }
+  return get_or_insert(syms.exts, id);
 }
 
 std::string HInstr::show() const {
@@ -465,3 +435,5 @@ std::string Instr::show() {
 
   return std::format("{} {}/{}, {}", op_name, arg_u, arg_i, ext);
 }
+
+} // namespace mold::internal

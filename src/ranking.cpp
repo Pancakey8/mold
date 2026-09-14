@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <variant>
 
+namespace mold::internal {
+
 std::flat_map<NodeId, std::size_t> ranks_of(const SortResult &sort) {
   std::flat_map<NodeId, std::size_t> rank{};
 
@@ -22,3 +24,5 @@ std::flat_map<NodeId, std::size_t> ranks_of(const SortResult &sort) {
 
   return rank;
 }
+
+}; // namespace mold::internal

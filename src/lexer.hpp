@@ -5,6 +5,8 @@
 #include <optional>
 #include <string_view>
 
+namespace mold::internal {
+
 #define TOKEN_KIND_LIST(X)                                                     \
   X(LIT_INT)                                                                   \
   X(LIT_REAL)                                                                  \
@@ -98,3 +100,5 @@ private:
   char advance();
   bool eof();
 };
+
+}; // namespace foo::internal

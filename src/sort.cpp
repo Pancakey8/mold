@@ -4,6 +4,8 @@
 #include <queue>
 #include <unordered_map>
 
+namespace mold::internal {
+
 void deps_of(const AST &ast, NodeId node, std::vector<std::string_view> &deps,
              std::vector<std::string_view> &locals) {
   std::visit(
@@ -106,3 +108,5 @@ SortResult topo_sort(const AST &ast) {
 
   return {std::move(tls), std::move(graph), std::move(order)};
 }
+
+};

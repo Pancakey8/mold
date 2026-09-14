@@ -3,6 +3,8 @@
 #include "ast.hpp"
 #include <unordered_map>
 
+namespace mold::internal {
+
 void deps_of(const AST &ast, NodeId node, std::vector<std::string_view> &deps,
              std::vector<std::string_view> &locals);
 
@@ -13,3 +15,5 @@ struct SortResult {
 };
 
 SortResult topo_sort(const AST &ast);
+
+}; // namespace foo::internal

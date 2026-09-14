@@ -2,6 +2,8 @@
 #include <charconv>
 #include <string>
 
+namespace mold::internal {
+
 bool Lexer::eof() { return cursor >= input.size(); }
 
 char Lexer::peek(size_t offset) {
@@ -302,3 +304,5 @@ std::string Token::show() const {
 
   return result;
 }
+
+}; // namespace foo::internal

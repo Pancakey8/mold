@@ -7,6 +7,8 @@
 #include <format>
 #include <print>
 
+namespace mold::internal {
+
 TypedAST Typing::run() {
   std::vector<NodeId> tls{};
 
@@ -767,3 +769,5 @@ SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped) {
 
   return typed;
 }
+
+}; // namespace mold::typing

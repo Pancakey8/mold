@@ -2,6 +2,8 @@
 #include "ast.hpp"
 #include "lexer.hpp"
 
+namespace mold::internal {
+
 #define expect(K)                                                              \
   if (!lexer.get() || lexer.get()->kind != Token::K) {                         \
     return pool.push({Error{"Expected " #K},                                   \
@@ -456,3 +458,5 @@ NodeId Parser::parse_tl() {
     return pool.push({Error{"Expected top-level"}, start->source});
   }
 }
+
+}; // namespace foo::internal
