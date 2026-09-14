@@ -277,7 +277,8 @@ std::pair<Program, SymbolTable> HighToLow::run() {
   }
 
   Program prog{std::move(consts), std::move(lo),
-               static_cast<std::uint32_t>(syms.globs.size())};
+               static_cast<std::uint32_t>(syms.globs.size()),
+               static_cast<uint32_t>(syms.exts.size())};
 
   return {std::move(prog), std::move(syms)};
 }
@@ -305,7 +306,7 @@ void HighToLow::lower(const HInstr &instr) {
             lo.emplace_back(Op::CTOR, event_at(i.fn), i.argc);
           },
           [&](const HInstr::Call &i) {
-            lo.emplace_back(Op::CTOR, ext_at(i.fn), i.argc);
+            lo.emplace_back(Op::CALL, ext_at(i.fn), i.argc);
           },
           [&](const HInstr::LoadAt &i) {
             lo.emplace_back(Op::LOAD_AT, glob_at(i.glob), i.depth);
@@ -422,7 +423,7 @@ std::string HInstr::show() const {
   return std::format("{} {}", tag, d);
 }
 
-std::string Instr::show() {
+std::string Instr::show() const {
   std::string_view op_name;
 #define X(T)                                                                   \
   case Op::T:                                                                  \

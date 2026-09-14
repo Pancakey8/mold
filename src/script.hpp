@@ -2,15 +2,27 @@
 
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 namespace mold {
 
-struct Value {
-  std::variant<std::monostate, std::int64_t, double, bool, std::string> data;
+struct Value;
+
+struct Event {
+  std::string_view kind;
+  std::vector<Value> args;
 };
+
+struct Value {
+  std::variant<std::monostate, std::int64_t, double, bool, std::string, Event>
+      data;
+};
+
+using ExtFn = std::function<Value(std::span<const Value> args)>;
 
 class Script {
 public:
@@ -21,6 +33,8 @@ public:
   void tick();
 
   Value read(std::string_view name);
+
+  void implement(std::string_view name, ExtFn fn);
 
   ~Script();
 
@@ -45,6 +59,15 @@ template <> struct std::formatter<mold::Value> {
           using T = std::decay_t<decltype(data)>;
           if constexpr (std::is_same_v<T, std::monostate>) {
             return std::format_to(ctx.out(), "null");
+          } else if constexpr (std::is_same_v<T, mold::Event>) {
+            auto out = std::format_to(ctx.out(), "{}(", data.kind);
+            for (std::size_t i = 0; i < data.args.size(); ++i) {
+              if (i > 0) {
+                out = std::format_to(out, ", ");
+              }
+              out = std::format_to(out, "{}", data.args[i]);
+            }
+            return std::format_to(out, ")");
           } else {
             return std::format_to(ctx.out(), "{}", data);
           }

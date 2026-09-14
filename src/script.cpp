@@ -33,12 +33,14 @@ using StringMap = std::unordered_map<std::string, T, TransparentStringHash,
 
 struct Script::Impl {
   Program prog;
-  StringMap<std::uint32_t> vars, inputs;
+  StringMap<std::uint32_t> vars, inputs, events, externs;
+  std::vector<std::string> event_names;
   Interpreter interp;
 
-  Impl(Program p, StringMap<std::uint32_t> vars, StringMap<std::uint32_t> ins)
-      : prog(std::move(p)), vars(std::move(vars)), inputs(std::move(ins)),
-        interp(prog) {}
+  explicit Impl(Program p) : prog(std::move(p)), interp(prog) {}
+
+  InternValue of_public(const Value &v) const;
+  Value of_intern(const InternValue &ival) const;
 };
 
 Script::~Script() = default;
@@ -51,7 +53,13 @@ Script Script::of_string(std::string_view input) {
   auto typed = Typing{ast, sorting}.run();
   auto typed_sort = migrate_sort(typed, sorting);
   auto hir = Compiler{typed, typed_sort}.run();
+  for (const auto &instr : hir) {
+    std::println("{}", instr.show());
+  }
   auto [prog, syms] = HighToLow{hir}.run();
+  for (const auto &instr : prog.instrs) {
+    std::println("{}", instr.show());
+  }
   StringMap<std::uint32_t> vars{};
   for (std::size_t id = 0; id < syms.globs.size(); ++id) {
     vars[std::string{syms.globs[id]}] = static_cast<std::uint32_t>(id);
@@ -65,16 +73,31 @@ Script Script::of_string(std::string_view input) {
       }
     }
   }
+  StringMap<std::uint32_t> events{};
+  std::vector<std::string> event_names{};
+  for (std::size_t id = 0; id < syms.events.size(); ++id) {
+    events[std::string{syms.events[id]}] = static_cast<std::uint32_t>(id);
+    event_names.push_back(std::string{syms.events[id]});
+  }
+  StringMap<std::uint32_t> externs{};
+  for (std::size_t id = 0; id < syms.exts.size(); ++id) {
+    externs[std::string{syms.exts[id]}] = static_cast<std::uint32_t>(id);
+  }
   // std::println("{}\n{}", vars, inputs);
-  auto impl = std::make_unique<Impl>(std::move(prog), std::move(vars),
-                                     std::move(inputs));
+  auto impl = std::make_unique<Impl>(std::move(prog));
+  impl->vars = std::move(vars);
+  impl->inputs = std::move(inputs);
+  impl->events = std::move(events);
+  impl->externs = std::move(externs);
+  impl->event_names = std::move(event_names);
+
   return Script{std::move(impl)};
 }
 
 void Script::tick() { impl->interp.tick(); }
 
-void Script::feed(std::string_view name, Value v) {
-  auto ival = std::visit(
+InternValue Script::Impl::of_public(const Value &v) const {
+  return std::visit(
       overload{
           [](std::int64_t n) -> InternValue {
             return {{.i = n}, InternValue::INT};
@@ -85,42 +108,82 @@ void Script::feed(std::string_view name, Value v) {
             return InternValue::of_string(n);
           },
           [](std::monostate) -> InternValue { return {{}, InternValue::NIL}; },
-      },
+          [this](Event e) -> InternValue {
+            std::vector<InternValue> args{};
+            args.reserve(e.args.size());
+            for (const auto &arg : e.args)
+              args.push_back(of_public(arg));
+            if (auto it = events.find(e.kind); it != events.end()) {
+              return InternValue::of_event(it->second, args);
+            } else {
+              assert(false && "TODO: Error handling");
+            }
+          }},
       v.data);
+}
+
+Value Script::Impl::of_intern(const InternValue &ival) const {
+  switch (ival.tag) {
+  case internal::InternValue::NIL:
+    return {std::monostate()};
+  case internal::InternValue::INT:
+    return {ival.data.i};
+  case internal::InternValue::REAL:
+    return {ival.data.r};
+  case internal::InternValue::BOOL:
+    return {ival.data.b};
+  case internal::InternValue::STRING:
+    return {std::string{ival.as_string()}};
+  case internal::InternValue::EVENT: {
+    std::vector<Value> vs{};
+    vs.reserve(ival.data.e->argc);
+    for (std::uint16_t i = 0; i < ival.data.e->argc; ++i) {
+      vs.push_back(of_intern(ival.data.e->args[i]));
+    }
+    auto &name = event_names[ival.data.e->tag];
+    return {Event{name, std::move(vs)}};
+  } break;
+  }
+}
+
+void Script::feed(std::string_view name, Value v) {
+  auto ival = impl->of_public(v);
   if (auto it = impl->inputs.find(name); it != impl->inputs.end()) {
     impl->interp.feed(it->second, ival);
   } else {
-    // TODO: Error handling
+    assert(false && "TODO: Error handling");
   }
 }
 
 Value Script::read(std::string_view name) {
   auto it = impl->vars.find(name);
   if (it == impl->vars.end()) {
-    // TODO: Error handling
+    assert(false && "TODO: Error handling");
     return {std::monostate()};
   }
   auto ival = impl->interp.read(it->second);
-  Value v;
-  switch (ival.tag) {
-  case internal::InternValue::NIL:
-    v = {std::monostate()};
-    break;
-  case internal::InternValue::INT:
-    v = {ival.data.i};
-    break;
-  case internal::InternValue::REAL:
-    v = {ival.data.r};
-    break;
-  case internal::InternValue::BOOL:
-    v = {ival.data.b};
-    break;
-  case internal::InternValue::STRING:
-    v = {std::string{ival.as_string()}};
-    break;
-  }
+  Value v = impl->of_intern(ival);
   ival.dec();
   return v;
 }
 
+void Script::implement(std::string_view name, ExtFn fn) {
+  auto it = impl->externs.find(name);
+  if (it == impl->externs.end()) {
+    assert(false && "TODO: Error handling");
+    return;
+  }
+  impl->interp.implement(
+      it->second,
+      [impl = impl.get(), fn = std::move(fn)](
+          std::uint16_t argc, InternValue *argv) -> InternValue {
+        std::vector<Value> args{};
+        args.reserve(argc);
+        for (std::uint16_t i = 0; i < argc; ++i) {
+          args.push_back(impl->of_intern(argv[i]));
+        }
+        auto res = fn(args);
+        return impl->of_public(res);
+      });
+}
 }; // namespace mold

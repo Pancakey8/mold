@@ -18,6 +18,10 @@ int main() {
 
   script.feed("x", {5});
   script.feed("y", {"Hello"});
+  script.implement("print", [](auto args) {
+    std::println("{}", args[0]);
+    return mold::Value{std::monostate()};
+  });
   script.tick();
   std::println("{}", script.read("foo"));
   std::println("{}", script.read("bar"));

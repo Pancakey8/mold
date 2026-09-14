@@ -70,7 +70,7 @@ struct Instr {
   Instr(Op op, std::uint32_t arg, std::uint16_t ext)
       : arg{.u = arg}, ext{ext}, kind{op} {}
 
-  std::string show();
+  std::string show() const;
 };
 
 #define HINSTR_KIND_LIST(FIRST, REST)                                          \
@@ -251,6 +251,7 @@ struct Program {
   std::vector<ConstVal> consts;
   std::vector<Instr> instrs;
   std::uint32_t var_count;
+  std::uint32_t ext_count;
 };
 
 struct SymbolTable {
