@@ -90,6 +90,7 @@ struct TickParam {
 };
 
 using ExtFunction = std::function<InternValue(std::uint16_t argc, InternValue *argv)>;
+using HandlerFunction = std::function<void(std::uint16_t argc, InternValue *argv)>;
 
 class Interpreter {
 public:
@@ -106,6 +107,8 @@ public:
 
   void implement(std::uint32_t id, ExtFunction fn) { exts[id] = fn; }
 
+  void on(std::uint32_t id, HandlerFunction fn) { listeners[id] = fn; }
+
   InternValue read(std::uint32_t id) {
     vals[id].inc();
     return vals[id];
@@ -113,6 +116,7 @@ public:
 
   void tick() {
     run();
+    dispatch();
     cleanup();
   }
 
@@ -126,6 +130,7 @@ private:
   std::stack<InternValue> stack{};
   std::vector<InternValue> locals{};
   std::vector<ExtFunction> exts{};
+  std::vector<HandlerFunction> listeners{};
   std::vector<std::uint32_t> dispatches{};
   std::vector<RingBuffer> histories{};
 
@@ -134,6 +139,8 @@ private:
   void run();
 
   void cleanup();
+
+  void dispatch();
 
   void store(std::uint32_t id, InternValue value);
 };

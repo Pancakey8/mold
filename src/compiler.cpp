@@ -276,9 +276,13 @@ std::pair<Program, SymbolTable> HighToLow::run() {
     lo[i].arg.i = labels.at(lo[i].arg.u) - i;
   }
 
-  Program prog{std::move(consts), std::move(lo),
-               static_cast<std::uint32_t>(syms.globs.size()),
-               static_cast<uint32_t>(syms.exts.size())};
+  Program prog{
+      std::move(consts),
+      std::move(lo),
+      static_cast<std::uint32_t>(syms.globs.size()),
+      static_cast<uint32_t>(syms.exts.size()),
+      static_cast<uint32_t>(syms.events.size()),
+  };
 
   return {std::move(prog), std::move(syms)};
 }

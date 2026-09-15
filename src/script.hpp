@@ -23,6 +23,7 @@ struct Value {
 };
 
 using ExtFn = std::function<Value(std::span<const Value> args)>;
+using HandlerFn = std::function<void(std::span<const Value> args)>;
 
 class Script {
 public:
@@ -35,6 +36,8 @@ public:
   Value read(std::string_view name);
 
   void implement(std::string_view name, ExtFn fn);
+
+  void on(std::string_view event, HandlerFn fn);
 
   ~Script();
 

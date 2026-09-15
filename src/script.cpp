@@ -186,4 +186,22 @@ void Script::implement(std::string_view name, ExtFn fn) {
         return impl->of_public(res);
       });
 }
+
+void Script::on(std::string_view name, HandlerFn fn) {
+  auto it = impl->events.find(name);
+  if (it == impl->events.end()) {
+    assert(false && "TODO: Error handling");
+    return;
+  }
+  impl->interp.on(it->second,
+                  [impl = impl.get(), fn = std::move(fn)](
+                      std::uint16_t argc, InternValue *argv) {
+                    std::vector<Value> args{};
+                    args.reserve(argc);
+                    for (std::uint16_t i = 0; i < argc; ++i) {
+                      args.push_back(impl->of_intern(argv[i]));
+                    }
+                    fn(args);
+                  });
+}
 }; // namespace mold

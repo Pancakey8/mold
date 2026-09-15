@@ -16,6 +16,7 @@ void Interpreter::init() {
   dirty.resize(prog.var_count);
   consts.reserve(prog.consts.size());
   exts.resize(prog.ext_count);
+  listeners.resize(prog.event_count);
   for (const auto &c : prog.consts) {
     auto v = std::visit(
         overload{
@@ -451,6 +452,24 @@ void Interpreter::run() {
     }
   }
 exit:
+}
+
+void Interpreter::dispatch() {
+  for (auto &sig : dispatches) {
+    if (vals[sig].tag != InternValue::EVENT) {
+      continue;
+    }
+
+    auto &e = *vals[sig].data.e;
+    if (listeners[e.tag]) {
+      vals[sig].inc();
+      listeners[e.tag](e.argc, e.args);
+      vals[sig].dec();
+    } else {
+      assert(false && "TODO: Error handling");
+    }
+  }
+  dispatches.clear();
 }
 
 void Interpreter::cleanup() {

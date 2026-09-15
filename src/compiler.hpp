@@ -252,6 +252,7 @@ struct Program {
   std::vector<Instr> instrs;
   std::uint32_t var_count;
   std::uint32_t ext_count;
+  std::uint32_t event_count;
 };
 
 struct SymbolTable {

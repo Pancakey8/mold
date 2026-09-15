@@ -9,22 +9,28 @@
 #include "utils.hpp"
 #include <iostream>
 #include <print>
+#include <ranges>
 
 int main() {
   std::string input((std::istreambuf_iterator<char>(std::cin)),
                     std::istreambuf_iterator<char>());
 
   auto script = mold::Script::of_string(input);
+  script.on("alert", [](auto args) { std::println("(!) ALERT: {}", args[0]); });
 
-  script.feed("x", {5});
-  script.feed("y", {"Hello"});
-  script.implement("print", [](auto args) {
-    std::println("{}", args[0]);
-    return mold::Value{std::monostate()};
-  });
+  script.feed("temp", {26});
   script.tick();
   std::println("{}", script.read("foo"));
-  std::println("{}", script.read("bar"));
+  script.feed("temp", {28});
+  script.tick();
+  std::println("{}", script.read("foo"));
+  script.feed("temp", {24});
+  script.tick();
+  std::println("{}", script.read("foo"));
+  script.feed("temp", {30});
+  script.tick();
+  std::println("{}", script.read("foo"));
+
 
   // using namespace mold::internal;
 
