@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <format>
 #include <functional>
@@ -17,8 +18,12 @@ struct Event {
   std::vector<Value> args;
 };
 
+using Date = std::chrono::sys_time<std::chrono::nanoseconds>;
+using Time = std::chrono::nanoseconds;
+
 struct Value {
-  std::variant<std::monostate, std::int64_t, double, bool, std::string, Event>
+  std::variant<std::monostate, std::int64_t, double, bool, std::string, Event,
+               Date, Time>
       data;
 };
 
@@ -71,6 +76,10 @@ template <> struct std::formatter<mold::Value> {
               out = std::format_to(out, "{}", data.args[i]);
             }
             return std::format_to(out, ")");
+          } else if constexpr (std::is_same_v<T, mold::Date>) {
+            return std::format_to(ctx.out(), "@{:%Y-%m-%dT%H:%M:%S}", data);
+          } else if constexpr (std::is_same_v<T, mold::Time>) {
+            return std::format_to(ctx.out(), "{}", data);
           } else {
             return std::format_to(ctx.out(), "{}", data);
           }

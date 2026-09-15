@@ -147,6 +147,9 @@ NodeId Typing::infer(NodeId id) {
                 c.cases.push_back({{MoldType::TIME, ty_l.nullable},
                                    {MoldType::DATE, ty_r.nullable},
                                    {MoldType::DATE, nullable}});
+                c.cases.push_back({{MoldType::TIME, ty_l.nullable},
+                                   {MoldType::TIME, ty_r.nullable},
+                                   {MoldType::TIME, nullable}});
               }
               if (n.kind == BinaryOp::SUB) {
                 c.cases.push_back({{MoldType::DATE, ty_l.nullable},
@@ -154,6 +157,9 @@ NodeId Typing::infer(NodeId id) {
                                    {MoldType::DATE, nullable}});
                 c.cases.push_back({{MoldType::DATE, ty_l.nullable},
                                    {MoldType::DATE, ty_r.nullable},
+                                   {MoldType::TIME, nullable}});
+                c.cases.push_back({{MoldType::TIME, ty_l.nullable},
+                                   {MoldType::TIME, ty_r.nullable},
                                    {MoldType::TIME, nullable}});
               }
               ctrs.push_back(c);
@@ -770,4 +776,4 @@ SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped) {
   return typed;
 }
 
-}; // namespace mold::typing
+}; // namespace mold::internal

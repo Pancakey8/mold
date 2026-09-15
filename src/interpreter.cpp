@@ -14,6 +14,7 @@ std::vector<std::uint16_t> depths_of(const Program &prog);
 void Interpreter::init() {
   vals.resize(prog.var_count);
   dirty.resize(prog.var_count);
+  current.resize(prog.var_count);
   consts.reserve(prog.consts.size());
   exts.resize(prog.ext_count);
   listeners.resize(prog.event_count);
@@ -36,8 +37,6 @@ void Interpreter::init() {
   for (std::size_t i = 0; i < prog.var_count; ++i) {
     if (depths[i] > 0) {
       histories[i].init(depths[i]);
-      vals[i].inc();
-      histories[i].push(vals[i]);
     }
   }
 }
@@ -46,11 +45,8 @@ void Interpreter::store(std::uint32_t id, InternValue value) {
   if (vals[id] != value) {
     dirty[id] = true;
   }
-  vals[id].dec();
-  vals[id] = value;
 
-  value.inc();
-  histories[id].push(value);
+  current[id] = value;
 }
 
 void Interpreter::run() {
@@ -135,6 +131,12 @@ void Interpreter::run() {
         std::string n{l.as_string()};
         n += r.as_string();
         stack.push(InternValue::of_string(n));
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::TIME) {
+        stack.push(InternValue{{.d = l.data.d + r.data.t}, InternValue::DATE});
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::DATE) {
+        stack.push(InternValue{{.d = l.data.t + r.data.d}, InternValue::DATE});
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        stack.push(InternValue{{.t = l.data.t + r.data.t}, InternValue::TIME});
       } else {
         assert(false && "Unreachable?");
       }
@@ -176,7 +178,12 @@ void Interpreter::run() {
       ip++;
     } break;
     case Op::LOAD: {
-      auto v = vals[instr.arg.u];
+      InternValue v;
+      if (dirty[instr.arg.u]) {
+        v = current[instr.arg.u];
+      } else {
+        v = vals[instr.arg.u];
+      }
       v.inc();
       stack.push(v);
       ip++;
@@ -198,6 +205,12 @@ void Interpreter::run() {
         stack.push(InternValue{{.i = l.data.i - r.data.i}, InternValue::INT});
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         stack.push(InternValue{{.r = l.data.r - r.data.r}, InternValue::REAL});
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::TIME) {
+        stack.push(InternValue{{.d = l.data.d - r.data.t}, InternValue::DATE});
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::DATE) {
+        stack.push(InternValue{{.t = l.data.d - r.data.d}, InternValue::TIME});
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        stack.push(InternValue{{.t = l.data.t - r.data.t}, InternValue::TIME});
       } else {
         assert(false && "Unreachable?");
       }
@@ -342,10 +355,18 @@ void Interpreter::run() {
       auto l = stack.top();
       stack.pop();
       bool res = false;
-      if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+      if (l.tag == InternValue::NIL) {
+        res = r.tag != InternValue::NIL;
+      } else if (r.tag == InternValue::NIL) {
+        res = false;
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i < r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         res = l.data.r < r.data.r;
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::DATE) {
+        res = l.data.d < r.data.d;
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        res = l.data.t < r.data.t;
       } else {
         assert(false && "Unreachable?");
       }
@@ -360,10 +381,18 @@ void Interpreter::run() {
       auto l = stack.top();
       stack.pop();
       bool res = false;
-      if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+      if (l.tag == InternValue::NIL) {
+        res = true;
+      } else if (r.tag == InternValue::NIL) {
+        res = false;
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i <= r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         res = l.data.r <= r.data.r;
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::DATE) {
+        res = l.data.d <= r.data.d;
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        res = l.data.t <= r.data.t;
       } else {
         assert(false && "Unreachable?");
       }
@@ -378,10 +407,18 @@ void Interpreter::run() {
       auto l = stack.top();
       stack.pop();
       bool res = false;
-      if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+      if (l.tag == InternValue::NIL) {
+        res = r.tag != InternValue::NIL;
+      } else if (r.tag == InternValue::NIL) {
+        res = true;
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i > r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         res = l.data.r > r.data.r;
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::DATE) {
+        res = l.data.d > r.data.d;
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        res = l.data.t > r.data.t;
       } else {
         assert(false && "Unreachable?");
       }
@@ -396,10 +433,18 @@ void Interpreter::run() {
       auto l = stack.top();
       stack.pop();
       bool res = false;
-      if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+      if (l.tag == InternValue::NIL) {
+        res = r.tag == InternValue::NIL;
+      } else if (r.tag == InternValue::NIL) {
+        res = true;
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i >= r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         res = l.data.r >= r.data.r;
+      } else if (l.tag == InternValue::DATE && r.tag == InternValue::DATE) {
+        res = l.data.d >= r.data.d;
+      } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
+        res = l.data.t >= r.data.t;
       } else {
         assert(false && "Unreachable?");
       }
@@ -411,7 +456,7 @@ void Interpreter::run() {
     case Op::LOAD_AT: {
       std::uint32_t id = instr.arg.u;
       std::uint16_t depth = instr.ext;
-      auto v = histories[id].get(depth);
+      auto v = histories[id].get(depth - 1);
       v.inc();
       stack.push(v);
       ip++;
@@ -470,6 +515,19 @@ void Interpreter::dispatch() {
     }
   }
   dispatches.clear();
+}
+
+void Interpreter::commit() {
+  for (std::uint32_t i = 0; i < vals.size(); ++i) {
+    if (dirty[i]) {
+      histories[i].push(vals[i]);
+      vals[i] = current[i];
+    } else {
+      vals[i].inc();
+      histories[i].push(vals[i]);
+    }
+  }
+  std::fill(current.begin(), current.end(), InternValue{{}, InternValue::NIL});
 }
 
 void Interpreter::cleanup() {
@@ -557,6 +615,8 @@ void InternValue::inc() {
   case INT:
   case REAL:
   case BOOL:
+  case DATE:
+  case TIME:
     break;
   }
 }
@@ -579,6 +639,8 @@ void InternValue::dec() {
   case INT:
   case REAL:
   case BOOL:
+  case DATE:
+  case TIME:
     break;
   }
 }
@@ -600,6 +662,8 @@ void InternValue::destroy() {
   case INT:
   case REAL:
   case BOOL:
+  case DATE:
+  case TIME:
     break;
   }
 }
@@ -642,6 +706,10 @@ bool InternValue::operator==(const InternValue &other) const {
     return data.r == other.data.r;
   case BOOL:
     return data.b == other.data.b;
+  case DATE:
+    return data.d == other.data.d;
+  case TIME:
+    return data.t == other.data.t;
   case STRING:
     return as_string() == other.as_string();
   case EVENT: {
@@ -657,8 +725,9 @@ bool InternValue::operator==(const InternValue &other) const {
 }
 
 void RingBuffer::init(std::size_t cap) {
-  capacity = cap + 1;
+  capacity = cap;
   buffer.resize(capacity, InternValue{{}, InternValue::NIL});
+  head = 0;
 }
 
 void RingBuffer::push(InternValue val) {

@@ -24,6 +24,8 @@ struct InternValue {
     bool b;
     InternString *s;
     InternEvent *e;
+    std::int64_t d;
+    std::int64_t t;
   } data;
 
   enum Tag : std::uint8_t {
@@ -32,8 +34,9 @@ struct InternValue {
     REAL,
     BOOL,
     STRING,
-    EVENT
-    // TODO: DATE, TIME, EVENT
+    EVENT,
+    DATE,
+    TIME,
   } tag;
 
   static InternValue of_string(std::string_view s);
@@ -89,8 +92,10 @@ struct TickParam {
   InternValue value;
 };
 
-using ExtFunction = std::function<InternValue(std::uint16_t argc, InternValue *argv)>;
-using HandlerFunction = std::function<void(std::uint16_t argc, InternValue *argv)>;
+using ExtFunction =
+    std::function<InternValue(std::uint16_t argc, InternValue *argv)>;
+using HandlerFunction =
+    std::function<void(std::uint16_t argc, InternValue *argv)>;
 
 class Interpreter {
 public:
@@ -117,6 +122,7 @@ public:
   void tick() {
     run();
     dispatch();
+    commit();
     cleanup();
   }
 
@@ -133,6 +139,7 @@ private:
   std::vector<HandlerFunction> listeners{};
   std::vector<std::uint32_t> dispatches{};
   std::vector<RingBuffer> histories{};
+  std::vector<InternValue> current{};
 
   void init();
 
@@ -141,6 +148,8 @@ private:
   void cleanup();
 
   void dispatch();
+
+  void commit();
 
   void store(std::uint32_t id, InternValue value);
 };

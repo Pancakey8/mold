@@ -7,9 +7,11 @@
 #include "sort.hpp"
 #include "typing.hpp"
 #include "utils.hpp"
+#include <chrono>
 #include <iostream>
 #include <print>
 #include <ranges>
+#include <thread>
 
 int main() {
   std::string input((std::istreambuf_iterator<char>(std::cin)),
@@ -17,20 +19,22 @@ int main() {
 
   auto script = mold::Script::of_string(input);
   script.on("alert", [](auto args) { std::println("(!) ALERT: {}", args[0]); });
+  script.implement("now", [](auto) -> mold::Value {
+    return {std::chrono::system_clock::now()};
+  });
+  script.implement("seconds", [](auto args) -> mold::Value {
+    auto n = std::get<std::int64_t>(args[0].data);
+    return {std::chrono::seconds{n}};
+  });
+  script.implement("trace", [](auto args) -> mold::Value {
+    std::println("{}", args[0]);
+    return args[1];
+  });
 
-  script.feed("temp", {26});
-  script.tick();
-  std::println("{}", script.read("foo"));
-  script.feed("temp", {28});
-  script.tick();
-  std::println("{}", script.read("foo"));
-  script.feed("temp", {24});
-  script.tick();
-  std::println("{}", script.read("foo"));
-  script.feed("temp", {30});
-  script.tick();
-  std::println("{}", script.read("foo"));
-
+  while (true) {
+    script.tick();
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  }
 
   // using namespace mold::internal;
 
