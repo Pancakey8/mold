@@ -33,6 +33,8 @@ int main() {
 
   while (true) {
     script.tick();
+    std::println("{} {} {}", script.read("y"), script.read("should_alert"),
+                 script.read("foo"));
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
   }
 

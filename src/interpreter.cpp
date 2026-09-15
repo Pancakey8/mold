@@ -44,9 +44,8 @@ void Interpreter::init() {
 void Interpreter::store(std::uint32_t id, InternValue value) {
   if (vals[id] != value) {
     dirty[id] = true;
+    current[id] = value;
   }
-
-  current[id] = value;
 }
 
 void Interpreter::run() {
@@ -72,7 +71,12 @@ void Interpreter::run() {
       ip = new_ip;
     } break;
     case Op::PULL: {
-      stack.push(InternValue{{.b = dirty[instr.arg.u]}, InternValue::BOOL});
+      auto id = instr.arg.u;
+      bool d = dirty[id];
+      if (!d && histories[id].capacity > 0) {
+        d = histories[id].get(0) != vals[id];
+      }
+      stack.push(InternValue{{.b = d}, InternValue::BOOL});
       ip++;
     } break;
     case Op::MP: {
@@ -456,7 +460,12 @@ void Interpreter::run() {
     case Op::LOAD_AT: {
       std::uint32_t id = instr.arg.u;
       std::uint16_t depth = instr.ext;
-      auto v = histories[id].get(depth - 1);
+      InternValue v;
+      if (depth == 1) {
+        v = vals[id];
+      } else {
+        v = histories[id].get(depth - 2);
+      }
       v.inc();
       stack.push(v);
       ip++;

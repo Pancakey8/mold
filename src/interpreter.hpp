@@ -121,8 +121,8 @@ public:
 
   void tick() {
     run();
-    dispatch();
     commit();
+    dispatch();
     cleanup();
   }
 
