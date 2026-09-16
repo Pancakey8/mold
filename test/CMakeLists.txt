@@ -1,5 +1,6 @@
 set(TEST_SOURCES
   fibonacci.cpp
+  alert.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

@@ -44,6 +44,8 @@ struct Script::Impl {
 };
 
 Script::~Script() = default;
+Script::Script(Script&&) noexcept = default;
+Script& Script::operator=(Script&&) noexcept = default;
 
 Script::Script(std::unique_ptr<Impl> impl) : impl(std::move(impl)) {}
 

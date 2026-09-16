@@ -59,8 +59,8 @@ public:
 
   void on(std::string_view event, HandlerFn fn);
 
-  Script(Script&&) noexcept = default;
-  Script& operator=(Script&&) noexcept = default;
+  Script(Script&&) noexcept;
+  Script& operator=(Script&&) noexcept;
 
   Script(const Script&) = delete;
   Script& operator=(const Script&) = delete;
