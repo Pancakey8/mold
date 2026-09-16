@@ -62,7 +62,10 @@ int main() {
   });
 
   while (true) {
-    script.tick();
+    if (auto res = script.tick(); !res.has_value()) {
+      std::println("{}", res.error());
+      break;
+    }
     std::println("{} {} {}", script.read("y"), script.read("should_alert"),
                  script.read("foo"));
     std::this_thread::sleep_for(std::chrono::milliseconds{100});

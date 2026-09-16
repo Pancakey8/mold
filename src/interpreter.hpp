@@ -99,6 +99,9 @@ using HandlerFunction =
 
 class Interpreter {
 public:
+  bool has_error{false};
+  std::string_view error{};
+
   Interpreter(const Interpreter &) = delete;
   Interpreter(Interpreter &&) = default;
   Interpreter &operator=(const Interpreter &) = delete;
@@ -153,8 +156,6 @@ private:
   std::vector<std::uint32_t> dispatches{};
   std::vector<RingBuffer> histories{};
   std::vector<InternValue> current{};
-  bool has_error{false};
-  std::string_view error{};
 
   void init();
 

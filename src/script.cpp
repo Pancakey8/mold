@@ -109,7 +109,14 @@ Script::of_string(std::string_view input) {
   return Script{std::move(impl)};
 }
 
-void Script::tick() { impl->interp.tick(); }
+std::expected<void, std::string_view> Script::tick() {
+  impl->interp.tick();
+  if (impl->interp.has_error) {
+    impl->interp.has_error = false;
+    return std::unexpected(impl->interp.error);
+  }
+  return {};
+}
 
 InternValue Script::Impl::of_public(const Value &v) const {
   return std::visit(

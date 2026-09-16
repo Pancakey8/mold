@@ -51,7 +51,7 @@ public:
 
   void feed(std::string_view name, Value value);
 
-  void tick();
+  std::expected<void, std::string_view> tick();
 
   Value read(std::string_view name);
 
