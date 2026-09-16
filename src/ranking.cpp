@@ -1,7 +1,7 @@
-#include "ranking.hpp"
-#include "ast.hpp"
-#include "typing.hpp"
-#include "utils.hpp"
+#include "mold/ranking.hpp"
+#include "mold/ast.hpp"
+#include "mold/typing.hpp"
+#include "mold/utils.hpp"
 #include <unordered_map>
 #include <variant>
 

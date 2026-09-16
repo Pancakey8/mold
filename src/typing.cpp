@@ -1,8 +1,8 @@
-#include "typing.hpp"
-#include "ast.hpp"
-#include "diagnostics.hpp"
-#include "sort.hpp"
-#include "utils.hpp"
+#include "mold/typing.hpp"
+#include "mold/ast.hpp"
+#include "mold/diagnostics.hpp"
+#include "mold/sort.hpp"
+#include "mold/utils.hpp"
 #include <flat_map>
 #include <flat_set>
 #include <format>

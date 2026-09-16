@@ -1,8 +1,8 @@
-#include "compiler.hpp"
-#include "ast.hpp"
-#include "ranking.hpp"
-#include "typing.hpp"
-#include "utils.hpp"
+#include "mold/compiler.hpp"
+#include "mold/ast.hpp"
+#include "mold/ranking.hpp"
+#include "mold/typing.hpp"
+#include "mold/utils.hpp"
 #include <cstddef>
 #include <flat_map>
 #include <format>

@@ -1,7 +1,7 @@
-#include "sort.hpp"
-#include "ast.hpp"
-#include "diagnostics.hpp"
-#include "utils.hpp"
+#include "mold/sort.hpp"
+#include "mold/ast.hpp"
+#include "mold/diagnostics.hpp"
+#include "mold/utils.hpp"
 #include <queue>
 #include <unordered_map>
 

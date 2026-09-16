@@ -1,5 +1,5 @@
-#include "ast.hpp"
-#include "utils.hpp"
+#include "mold/ast.hpp"
+#include "mold/utils.hpp"
 
 namespace mold::internal {
 bool Node::is_toplevel() const {

@@ -1,6 +1,6 @@
-#include "parser.hpp"
-#include "ast.hpp"
-#include "lexer.hpp"
+#include "mold/parser.hpp"
+#include "mold/ast.hpp"
+#include "mold/lexer.hpp"
 
 namespace mold::internal {
 
