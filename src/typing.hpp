@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.hpp"
+#include "diagnostics.hpp"
 #include "sort.hpp"
 #include <optional>
 #include <unordered_map>
@@ -113,6 +114,8 @@ struct Constraint {
   std::vector<NodeId> nodes;
   std::vector<InternType> vars;
   std::vector<std::vector<TypeMatch>> cases;
+  Source from;
+  bool is_finished{false};
 };
 
 struct Signature {
@@ -125,7 +128,7 @@ public:
   explicit Typing(const AST &ast, const SortResult &sorting)
       : ast(ast), sorting(sorting) {}
 
-  TypedAST run();
+  std::pair<TypedAST, std::vector<Diagnostic>> run();
 
 private:
   const AST &ast;
@@ -137,6 +140,7 @@ private:
   std::unordered_map<std::string_view, InternType> globals{};
   std::unordered_map<std::string_view, Signature> sigs{};
   std::flat_map<NodeId, MoldType::Base> casts{};
+  std::vector<Diagnostic> diags{};
 
   std::vector<InternType> inferred{};
   TypedNodePool pool{};
@@ -146,7 +150,7 @@ private:
   [[nodiscard]]
   bool unify(InternType a, InternType b);
 
-  InternType join(NodeId l, NodeId r, InternType a, InternType b);
+  InternType join(Source from, NodeId l, NodeId r, InternType a, InternType b);
 
   bool compatible(InternType have, MoldType exp);
 

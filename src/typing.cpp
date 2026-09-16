@@ -1,5 +1,6 @@
 #include "typing.hpp"
 #include "ast.hpp"
+#include "diagnostics.hpp"
 #include "sort.hpp"
 #include "utils.hpp"
 #include <flat_map>
@@ -9,7 +10,7 @@
 
 namespace mold::internal {
 
-TypedAST Typing::run() {
+std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
   std::vector<NodeId> tls{};
 
   for (auto id : sorting.order) {
@@ -18,11 +19,20 @@ TypedAST Typing::run() {
 
   propagate();
 
+  for (auto &c : ctrs) {
+    if (!c.is_finished) {
+      diags.emplace_back("Underconstrained constraint failed to resolve",
+                         c.from);
+    }
+  }
+
   for (auto id = pool.begin(); id != pool.end(); ++id) {
     pool[id].type = to_mold_type(inferred[id.id]);
   }
 
-  return {std::move(pool), std::move(tls), std::move(casts)};
+  return std::make_pair(
+      TypedAST{std::move(pool), std::move(tls), std::move(casts)},
+      std::move(diags));
 }
 
 NodeId Typing::infer(NodeId id) {
@@ -62,8 +72,13 @@ NodeId Typing::infer(NodeId id) {
             case BinaryOp::AND:
             case BinaryOp::OR: {
               if (!unify(ty_l, InternType::concrete(MoldType::BOOL)) ||
-                  !unify(ty_l, InternType::concrete(MoldType::BOOL)))
-                assert(false && "TODO: Error handling");
+                  !unify(ty_l, InternType::concrete(MoldType::BOOL))) {
+                diags.emplace_back("Operation expects Bool, Bool",
+                                   ast[id].source);
+                return push_node(
+                    BinaryOp{n.kind, l, r}, ast[id].source,
+                    InternType::concrete(MoldType::FAIL, nullable));
+              }
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::BOOL, nullable));
             } break;
@@ -72,14 +87,19 @@ NodeId Typing::infer(NodeId id) {
             case BinaryOp::SHL:
             case BinaryOp::SHR: {
               if (!unify(ty_l, InternType::concrete(MoldType::INT)) ||
-                  !unify(ty_l, InternType::concrete(MoldType::INT)))
-                assert(false && "TODO: Error handling");
+                  !unify(ty_l, InternType::concrete(MoldType::INT))) {
+                diags.emplace_back("Operation expects Int, Int",
+                                   ast[id].source);
+                return push_node(
+                    BinaryOp{n.kind, l, r}, ast[id].source,
+                    InternType::concrete(MoldType::FAIL, nullable));
+              }
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::INT, nullable));
             } break;
             case BinaryOp::EQ:
             case BinaryOp::NEQ: {
-              join(l, r, ty_l, ty_r);
+              join(ast[id].source, l, r, ty_l, ty_r);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::BOOL));
             } break;
@@ -104,7 +124,8 @@ NodeId Typing::infer(NodeId id) {
                    {MoldType::DATE, ty_r.nullable}},
                   {{MoldType::TIME, ty_l.nullable},
                    {MoldType::TIME, ty_r.nullable}},
-                }
+                },
+                .from = ast[id].source
               };
               // clang-format on
               ctrs.push_back(std::move(c));
@@ -134,7 +155,8 @@ NodeId Typing::infer(NodeId id) {
                   {{MoldType::REAL, ty_l.nullable},
                    {MoldType::INT, ty_r.nullable, MoldType::REAL},
                    {MoldType::REAL, nullable}},
-                }
+                },
+                .from = ast[id].source
               };
               // clang-format on
               if (n.kind == BinaryOp::ADD) {
@@ -167,9 +189,12 @@ NodeId Typing::infer(NodeId id) {
             } break;
             case BinaryOp::COAL: {
               if (!ty_l.nullable) {
-                assert(false && "TODO: Error handling");
+                diags.emplace_back("Operation expects nullable LHS",
+                                   ast[id].source);
+                return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
               }
-              auto res = join(l, r, ty_l, ty_r);
+              auto res = join(ast[id].source, l, r, ty_l, ty_r);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
             } break;
             }
@@ -184,10 +209,6 @@ NodeId Typing::infer(NodeId id) {
           },
           [&](const IfElse &n) -> NodeId {
             auto cond = infer(n.cond);
-            if (!unify(inferred[cond.id],
-                       InternType::concrete(MoldType::BOOL))) {
-              assert(false && "TODO: Error handling");
-            }
 
             auto tru = infer(n.tru);
             auto fals = NODEID_NONE;
@@ -197,9 +218,16 @@ NodeId Typing::infer(NodeId id) {
             if (n.fals != NODEID_NONE) {
               fals = infer(n.fals);
               auto ty_fals = inferred[fals.id];
-              ty_res = join(tru, fals, ty_tru, ty_fals);
+              ty_res = join(ast[id].source, tru, fals, ty_tru, ty_fals);
             } else {
               ty_res.nullable = true;
+            }
+
+            if (!unify(inferred[cond.id],
+                       InternType::concrete(MoldType::BOOL))) {
+              diags.emplace_back("Condition must be boolean", ast[id].source);
+              return push_node(IfElse{cond, tru, fals}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
             }
 
             return push_node(IfElse{cond, tru, fals}, ast[id].source, ty_res);
@@ -213,8 +241,13 @@ NodeId Typing::infer(NodeId id) {
             auto callee_id = sorting.tls_names.at(n.name);
             const auto &callee = ast[callee_id];
             if (auto fn = std::get_if<Function>(&callee.data)) {
-              if (fn->params.size() != n.params.size())
-                assert(false && "TODO: Error handling");
+              if (fn->params.size() != n.params.size()) {
+                diags.emplace_back(
+                    "Parameter counts must match on function call",
+                    ast[id].source);
+                return push_node(FuncCall{n.name, {}}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
               std::vector<NodeId> params{};
               std::vector<std::string_view> names{};
               for (auto p : n.params) {
@@ -231,19 +264,31 @@ NodeId Typing::infer(NodeId id) {
                   ast[id].source, inferred[form.id]);
             } else if (sigs.contains(n.name)) {
               const auto &sig = sigs.at(n.name);
-              if (sig.params.size() != n.params.size())
-                assert(false && "TODO: Error handling");
+              if (sig.params.size() != n.params.size()) {
+                diags.emplace_back(
+                    "Parameter counts must match on function call",
+                    ast[id].source);
+                return push_node(FuncCall{n.name, {}}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
               std::vector<NodeId> params{};
               for (std::size_t i = 0; i < n.params.size(); ++i) {
                 auto p = infer(n.params[i]);
-                if (!assignable(p, inferred[p.id], sig.params[i]))
-                  assert(false && "TODO: Error handling");
+                if (!assignable(p, inferred[p.id], sig.params[i])) {
+                  diags.emplace_back(
+                      "Parameter type doesn't fit passed argument",
+                      ast[n.params[i]].source);
+                  return push_node(FuncCall{n.name, {}}, ast[id].source,
+                                   InternType::concrete(MoldType::FAIL));
+                }
                 params.push_back(p);
               }
               return push_node(FuncCall{n.name, std::move(params)},
                                ast[id].source, sig.ret);
             } else {
-              assert(false && "TODO: Error handling");
+              diags.emplace_back("Calling non-function", ast[id].source);
+              return push_node(FuncCall{n.name, {}}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
             }
           },
           [&](const TypeName &n) -> NodeId {
@@ -270,8 +315,14 @@ NodeId Typing::infer(NodeId id) {
             auto sig = infer(n.type);
             auto ty_sig = inferred[sig.id];
             if (globals.contains(n.name)) {
-              if (!unify(globals[n.name], ty_sig))
-                assert(false && "TODO: Error handling");
+              if (!unify(globals[n.name], ty_sig)) {
+                diags.emplace_back(
+                    "Type failed to unify with previous assumption",
+                    ast[id].source);
+                globals[n.name] = InternType::concrete(MoldType::FAIL);
+                return push_node(Input{n.name, sig}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
             }
             globals[n.name] = ty_sig;
             return push_node(Input{n.name, sig}, ast[id].source, ty_sig);
@@ -280,8 +331,14 @@ NodeId Typing::infer(NodeId id) {
             auto init = infer(n.init);
             auto ty_init = inferred[init.id];
             if (globals.contains(n.name)) {
-              if (!unify(globals[n.name], ty_init))
-                assert(false && "TODO: Error handling");
+              if (!unify(globals[n.name], ty_init)) {
+                diags.emplace_back(
+                    "Type failed to unify with previous assumption",
+                    ast[id].source);
+                globals[n.name] = InternType::concrete(MoldType::FAIL);
+                return push_node(Formula{n.name, init}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
             }
             globals[n.name] = ty_init;
             return push_node(Formula{n.name, init}, ast[id].source, ty_init);
@@ -290,12 +347,21 @@ NodeId Typing::infer(NodeId id) {
             auto init = infer(n.init);
             auto ty_init = inferred[init.id];
             if (globals.contains(n.name)) {
-              if (!unify(globals[n.name], ty_init))
-                assert(false && "TODO: Error handling");
+              if (!unify(globals[n.name], ty_init)) {
+                diags.emplace_back(
+                    "Type failed to unify with previous assumption",
+                    ast[id].source);
+                globals[n.name] = InternType::concrete(MoldType::FAIL);
+                return push_node(Signal{n.name, init}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
             }
             globals[n.name] = ty_init;
-            if (!unify(ty_init, InternType::concrete(MoldType::EVENT, true)))
-              assert(false && "TODO: Error handling");
+            if (!unify(ty_init, InternType::concrete(MoldType::EVENT, true))) {
+              diags.emplace_back("Signal must have type event", ast[id].source);
+              return push_node(Signal{n.name, init}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
+            }
             return push_node(Signal{n.name, init}, ast[id].source, ty_init);
           },
           [&](const Output &n) -> NodeId {
@@ -337,6 +403,7 @@ NodeId Typing::infer(NodeId id) {
             return NODEID_NONE;
           },
           [&](const Error &n) -> NodeId {
+            diags.emplace_back(n.msg, ast[id].source);
             return push_node(n, ast[id].source,
                              InternType::concrete(MoldType::FAIL));
           },
@@ -403,7 +470,8 @@ bool Typing::unify(InternType a, InternType b) {
   return true;
 }
 
-InternType Typing::join(NodeId l, NodeId r, InternType a, InternType b) {
+InternType Typing::join(Source from, NodeId l, NodeId r, InternType a,
+                        InternType b) {
   auto res = InternType::var(fresh(), a.nullable || b.nullable);
 #define X(T)                                                                   \
   {{MoldType::T, a.nullable},                                                  \
@@ -411,7 +479,8 @@ InternType Typing::join(NodeId l, NodeId r, InternType a, InternType b) {
    {MoldType::T, a.nullable || b.nullable}},
   Constraint c{.nodes = {l, r, NODEID_NONE},
                .vars = {a, b, res},
-               .cases = {TYPE_BASE_LIST(X)}};
+               .cases = {TYPE_BASE_LIST(X)},
+               .from = from};
 #undef X
   c.cases.push_back({{MoldType::INT, a.nullable, MoldType::REAL},
                      {MoldType::REAL, b.nullable},
@@ -447,6 +516,9 @@ void Typing::propagate() {
     changed = false;
 
     for (auto &c : ctrs) {
+      if (c.is_finished)
+        continue;
+
       auto e = std::erase_if(c.cases, [&](const auto &alt) -> bool {
         for (std::uint32_t i = 0; i < c.vars.size(); ++i) {
           if (!compatible(c.vars[i], {alt[i].base, alt[i].nullable}))
@@ -464,16 +536,20 @@ void Typing::propagate() {
         for (std::uint32_t i = 0; i < c.vars.size(); ++i) {
           if (!unify(c.vars[i],
                      InternType::concrete(tys[i].base, tys[i].nullable))) {
-            assert(false && "TODO: Error handling");
+            diags.emplace_back("Constraint failed to unify all parameters",
+                               c.from);
           }
           if (tys[i].cast_target) {
             casts[c.nodes[i]] = *tys[i].cast_target;
           }
         }
+        c.is_finished = true;
       }
 
       if (c.cases.size() == 0) {
-        assert(false && "TODO: Error handling");
+        diags.emplace_back("Constraint failed to resolve to a valid case",
+                           c.from);
+        c.is_finished = true;
       }
     }
   }

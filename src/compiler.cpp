@@ -169,7 +169,7 @@ void Compiler::compile(NodeId id) {
             }
           },
           [&](const Function &) {}, // N/A here
-          [&](const Error &) { assert(false && "TODO: Unreachable?"); },
+          [&](const Error &) {},
           [&](const Inline &n) {
             for (auto par : n.params | std::ranges::views::reverse) {
               compile(par);

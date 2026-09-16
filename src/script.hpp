@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <expected>
 #include <format>
 #include <functional>
 #include <memory>
@@ -30,9 +31,23 @@ struct Value {
 using ExtFn = std::function<Value(std::span<const Value> args)>;
 using HandlerFn = std::function<void(std::span<const Value> args)>;
 
+struct Source {
+  std::size_t start, end;
+
+  Source operator+(const Source &other) const {
+    return Source{std::min(start, other.start), std::max(end, other.end)};
+  }
+};
+
+struct Diagnostic {
+  std::string_view message;
+  Source src;
+};
+
 class Script {
 public:
-  static Script of_string(std::string_view input);
+  static std::expected<Script, std::vector<Diagnostic>>
+  of_string(std::string_view input);
 
   void feed(std::string_view name, Value value);
 
@@ -43,6 +58,12 @@ public:
   void implement(std::string_view name, ExtFn fn);
 
   void on(std::string_view event, HandlerFn fn);
+
+  Script(Script&&) noexcept = default;
+  Script& operator=(Script&&) noexcept = default;
+
+  Script(const Script&) = delete;
+  Script& operator=(const Script&) = delete;
 
   ~Script();
 

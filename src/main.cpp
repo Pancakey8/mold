@@ -7,6 +7,7 @@
 #include "sort.hpp"
 #include "typing.hpp"
 #include "utils.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <print>
@@ -17,7 +18,36 @@ int main() {
   std::string input((std::istreambuf_iterator<char>(std::cin)),
                     std::istreambuf_iterator<char>());
 
-  auto script = mold::Script::of_string(input);
+  auto res = mold::Script::of_string(input);
+
+  if (!res.has_value()) {
+    for (auto &diag : res.error()) {
+      std::size_t line = 1;
+      std::size_t col = 1;
+
+      for (std::size_t i = 0; i < diag.src.start && i < input.size(); ++i) {
+        if (input[i] == '\n') {
+          line++;
+          col = 1;
+        } else {
+          col++;
+        }
+      }
+
+      auto start = std::clamp(diag.src.start, 0UZ, input.size() - 1);
+      auto end = std::clamp(diag.src.end, 0UZ, input.size() - 1);
+      std::string_view source_str =
+          std::string_view(input).substr(start, end - start);
+
+      std::println("{}:{}: {}", line, col, diag.message);
+      std::println("At {}\n", source_str);
+    }
+
+    return 1;
+  }
+
+  auto &script = *res;
+
   script.on("alert", [](auto args) { std::println("(!) ALERT: {}", args[0]); });
   script.implement("now", [](auto) -> mold::Value {
     return {std::chrono::system_clock::now()};

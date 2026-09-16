@@ -47,10 +47,25 @@ Script::~Script() = default;
 
 Script::Script(std::unique_ptr<Impl> impl) : impl(std::move(impl)) {}
 
-Script Script::of_string(std::string_view input) {
+std::expected<Script, std::vector<mold::Diagnostic>>
+Script::of_string(std::string_view input) {
   auto ast = Parser{{input}}.parse();
-  auto sorting = topo_sort(ast);
-  auto typed = Typing{ast, sorting}.run();
+  auto [sorting, sort_diags] = TopoSort{ast}.run();
+  auto [typed, ast_diags] = Typing{ast, sorting}.run();
+  if (!sort_diags.empty() || !ast_diags.empty()) {
+    std::vector<mold::Diagnostic> diags{};
+    diags.reserve(sort_diags.size() + ast_diags.size());
+
+    for (auto &diag : sort_diags) {
+      diags.push_back({diag.message, {diag.src.start, diag.src.end}});
+    }
+
+    for (auto &diag : ast_diags) {
+      diags.push_back({diag.message, {diag.src.start, diag.src.end}});
+    }
+
+    return std::unexpected(std::move(diags));
+  }
   auto typed_sort = migrate_sort(typed, sorting);
   auto hir = Compiler{typed, typed_sort}.run();
   for (const auto &instr : hir) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.hpp"
+#include "diagnostics.hpp"
 #include <unordered_map>
 
 namespace mold::internal {
@@ -14,6 +15,21 @@ struct SortResult {
   std::vector<NodeId> order{};
 };
 
-SortResult topo_sort(const AST &ast);
+std::pair<SortResult, std::vector<Diagnostic>> topo_sort(const AST &ast);
 
-}; // namespace foo::internal
+class TopoSort {
+public:
+  TopoSort(const AST &ast) : ast(ast) {}
+  std::pair<SortResult, std::vector<Diagnostic>> run();
+
+private:
+  const AST &ast;
+  std::unordered_map<std::string_view, NodeId> tls{};
+  std::vector<Diagnostic> diags{};
+
+  void deps_of(NodeId node, std::vector<std::string_view> &deps,
+               std::vector<std::string_view> &locals);
+
+};
+
+}; // namespace mold::internal
