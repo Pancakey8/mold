@@ -34,7 +34,8 @@ int main() {
     hits++;
   });
 
-  for (int i = 0; i < 32; ++i) {
+  int i = 0;
+  for (; i < 32; ++i) {
     using namespace std::chrono_literals;
     if (auto res = script.tick(); !res.has_value()) {
       std::println("{}", res.error());
@@ -44,5 +45,7 @@ int main() {
     std::this_thread::sleep_for(100ms);
   }
 
-  assert(hits == 2);
+  // Potentially not stable if precise, but i == 10 is expected
+  std::println("{}", i);
+  assert(hits == 2 && i > 5);
 }

@@ -1,6 +1,8 @@
 set(TEST_SOURCES
   fibonacci.cpp
   alert.cpp
+  functions.cpp
+  ambiguity.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

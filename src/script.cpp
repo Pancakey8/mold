@@ -70,13 +70,13 @@ Script::of_string(std::string_view input) {
   }
   auto typed_sort = migrate_sort(typed, sorting);
   auto hir = Compiler{typed, typed_sort}.run();
-  for (const auto &instr : hir) {
-    std::println("{}", instr.show());
-  }
+  // for (const auto &instr : hir) {
+  //   std::println("{}", instr.show());
+  // }
   auto [prog, syms] = HighToLow{hir}.run();
-  for (const auto &instr : prog.instrs) {
-    std::println("{}", instr.show());
-  }
+  // for (const auto &instr : prog.instrs) {
+  //   std::println("{}", instr.show());
+  // }
   StringMap<std::uint32_t> vars{};
   for (std::size_t id = 0; id < syms.globs.size(); ++id) {
     vars[std::string{syms.globs[id]}] = static_cast<std::uint32_t>(id);

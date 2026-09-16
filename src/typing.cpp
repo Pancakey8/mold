@@ -129,6 +129,7 @@ NodeId Typing::infer(NodeId id) {
               };
               // clang-format on
               ctrs.push_back(std::move(c));
+              propagate();
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::BOOL));
             } break;
@@ -185,6 +186,7 @@ NodeId Typing::infer(NodeId id) {
                                    {MoldType::TIME, nullable}});
               }
               ctrs.push_back(c);
+              propagate();
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
             } break;
             case BinaryOp::COAL: {
