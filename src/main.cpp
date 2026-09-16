@@ -47,28 +47,14 @@ int main() {
   }
 
   auto &script = *res;
+  script.implement("every", [](auto) -> mold::Value { return {true}; });
 
-  script.on("alert", [](auto args) { std::println("(!) ALERT: {}", args[0]); });
-  script.implement("now", [](auto) -> mold::Value {
-    return {std::chrono::system_clock::now()};
-  });
-  script.implement("seconds", [](auto args) -> mold::Value {
-    auto n = std::get<std::int64_t>(args[0].data);
-    return {std::chrono::seconds{n}};
-  });
-  script.implement("trace", [](auto args) -> mold::Value {
-    std::println("{}", args[0]);
-    return args[1];
-  });
-
-  while (true) {
+  for (std::size_t i = 0; i < 10; ++i) {
     if (auto res = script.tick(); !res.has_value()) {
       std::println("{}", res.error());
       break;
     }
-    std::println("{} {} {}", script.read("y"), script.read("should_alert"),
-                 script.read("foo"));
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    std::println("{}", script.read("fib"));
   }
 
   // using namespace mold::internal;

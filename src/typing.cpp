@@ -537,6 +537,31 @@ void Typing::propagate() {
       if (e > 0)
         changed = true;
 
+      // Multiple cases, all but one are casts
+      // Solves def x := pre(x) ? 0
+      if (c.cases.size() > 1) {
+        // std::println("Here");
+        auto it = c.cases.begin();
+        auto non_cast = c.cases.end();
+        std::size_t non_cast_count{0};
+        for (; it != c.cases.end(); ++it) {
+          if (std::none_of(it->begin(), it->end(),
+                           [](auto match) { return match.cast_target; })) {
+            non_cast_count++;
+            non_cast = it;
+          }
+        }
+
+        // std::println("Count {}", non_cast_count);
+        if (non_cast_count == 1) {
+          // std::println("Choice");
+          auto choice = std::move(*non_cast);
+          c.cases.clear();
+          c.cases.push_back(std::move(choice));
+          changed = true;
+        }
+      }
+
       if (c.cases.size() == 1) {
         auto &tys = c.cases.front();
         for (std::uint32_t i = 0; i < c.vars.size(); ++i) {
