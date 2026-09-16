@@ -142,7 +142,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         stack.push(InternValue{{.t = l.data.t + r.data.t}, InternValue::TIME});
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in addition";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       l.dec();
       r.dec();
@@ -216,7 +220,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         stack.push(InternValue{{.t = l.data.t - r.data.t}, InternValue::TIME});
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in subtraction";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       l.dec();
       r.dec();
@@ -234,7 +242,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         stack.push(InternValue{{.r = l.data.r * r.data.r}, InternValue::REAL});
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in multiplication";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       l.dec();
       r.dec();
@@ -252,7 +264,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
         stack.push(InternValue{{.r = l.data.r / r.data.r}, InternValue::REAL});
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in division";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       l.dec();
       r.dec();
@@ -271,7 +287,11 @@ void Interpreter::run() {
         stack.push(InternValue{{.r = std::fmod(l.data.r, r.data.r)},
                                InternValue::REAL});
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in modulo";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       l.dec();
       r.dec();
@@ -282,7 +302,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::INT && r.tag == InternValue::INT);
+      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+        has_error = true;
+        error = "Type error in shift left";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.i = l.data.i << r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
@@ -293,7 +319,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::INT && r.tag == InternValue::INT);
+      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+        has_error = true;
+        error = "Type error in shift right";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.i = l.data.i >> r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
@@ -304,7 +336,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::INT && r.tag == InternValue::INT);
+      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+        has_error = true;
+        error = "Type error in bitwise and";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.i = l.data.i & r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
@@ -315,7 +353,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::INT && r.tag == InternValue::INT);
+      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+        has_error = true;
+        error = "Type error in bitwise or";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.i = l.data.i | r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
@@ -326,7 +370,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL);
+      if (!(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL)) {
+        has_error = true;
+        error = "Type error in boolean and";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.b = l.data.b && r.data.b}, InternValue::BOOL});
       l.dec();
       r.dec();
@@ -337,7 +387,13 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      assert(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL);
+      if (!(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL)) {
+        has_error = true;
+        error = "Type error in boolean or";
+        l.dec();
+        r.dec();
+        goto exit;
+      }
       stack.push(InternValue{{.b = l.data.b || r.data.b}, InternValue::BOOL});
       l.dec();
       r.dec();
@@ -372,7 +428,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         res = l.data.t < r.data.t;
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in less than";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       stack.push(InternValue{{.b = res}, InternValue::BOOL});
       l.dec();
@@ -398,7 +458,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         res = l.data.t <= r.data.t;
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in less than or equal";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       stack.push(InternValue{{.b = res}, InternValue::BOOL});
       l.dec();
@@ -424,7 +488,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         res = l.data.t > r.data.t;
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in greater than";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       stack.push(InternValue{{.b = res}, InternValue::BOOL});
       l.dec();
@@ -450,7 +518,11 @@ void Interpreter::run() {
       } else if (l.tag == InternValue::TIME && r.tag == InternValue::TIME) {
         res = l.data.t >= r.data.t;
       } else {
-        assert(false && "Unreachable?");
+        has_error = true;
+        error = "Type error in greater than or equal";
+        l.dec();
+        r.dec();
+        goto exit;
       }
       stack.push(InternValue{{.b = res}, InternValue::BOOL});
       l.dec();
@@ -496,7 +568,7 @@ void Interpreter::run() {
         auto res = exts[instr.arg.u](argc, args.data());
         stack.push(res);
       } else {
-        assert(false && "TODO: Error handling");
+        stack.push({{}, InternValue::NIL});
       }
       for (auto &arg : args) {
         arg.dec();
@@ -515,12 +587,10 @@ void Interpreter::dispatch() {
     }
 
     auto &e = *vals[sig].data.e;
-    if (listeners[e.tag]) {
+    if (e.tag < listeners.size() && listeners[e.tag]) {
       vals[sig].inc();
       listeners[e.tag](e.argc, e.args);
       vals[sig].dec();
-    } else {
-      assert(false && "TODO: Error handling");
     }
   }
   dispatches.clear();

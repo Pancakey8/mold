@@ -238,6 +238,11 @@ NodeId Typing::infer(NodeId id) {
             return push_node(n, ast[id].source, t);
           },
           [&](const FuncCall &n) -> NodeId {
+            if (!sorting.tls_names.contains(n.name)) {
+              diags.emplace_back("Calling non-function", ast[id].source);
+              return push_node(FuncCall{n.name, {}}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
+            }
             auto callee_id = sorting.tls_names.at(n.name);
             const auto &callee = ast[callee_id];
             if (auto fn = std::get_if<Function>(&callee.data)) {

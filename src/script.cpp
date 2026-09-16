@@ -131,7 +131,7 @@ InternValue Script::Impl::of_public(const Value &v) const {
             if (auto it = events.find(e.kind); it != events.end()) {
               return InternValue::of_event(it->second, args);
             } else {
-              assert(false && "TODO: Error handling");
+              return InternValue::of_event(-1, args);
             }
           },
           [](Date d) -> InternValue {
@@ -175,15 +175,12 @@ void Script::feed(std::string_view name, Value v) {
   auto ival = impl->of_public(v);
   if (auto it = impl->inputs.find(name); it != impl->inputs.end()) {
     impl->interp.feed(it->second, ival);
-  } else {
-    assert(false && "TODO: Error handling");
   }
 }
 
 Value Script::read(std::string_view name) {
   auto it = impl->vars.find(name);
   if (it == impl->vars.end()) {
-    assert(false && "TODO: Error handling");
     return {std::monostate()};
   }
   auto ival = impl->interp.read(it->second);
@@ -195,7 +192,6 @@ Value Script::read(std::string_view name) {
 void Script::implement(std::string_view name, ExtFn fn) {
   auto it = impl->externs.find(name);
   if (it == impl->externs.end()) {
-    assert(false && "TODO: Error handling");
     return;
   }
   impl->interp.implement(
@@ -215,7 +211,6 @@ void Script::implement(std::string_view name, ExtFn fn) {
 void Script::on(std::string_view name, HandlerFn fn) {
   auto it = impl->events.find(name);
   if (it == impl->events.end()) {
-    assert(false && "TODO: Error handling");
     return;
   }
   impl->interp.on(it->second, [impl = impl.get(), fn = std::move(fn)](

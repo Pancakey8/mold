@@ -108,15 +108,28 @@ public:
 
   ~Interpreter();
 
-  void feed(std::uint32_t id, InternValue val) { store(id, val); }
+  void feed(std::uint32_t id, InternValue val) {
+    if (id < prog.var_count)
+      store(id, val);
+  }
 
-  void implement(std::uint32_t id, ExtFunction fn) { exts[id] = fn; }
+  void implement(std::uint32_t id, ExtFunction fn) {
+    if (id < exts.size())
+      exts[id] = fn;
+  }
 
-  void on(std::uint32_t id, HandlerFunction fn) { listeners[id] = fn; }
+  void on(std::uint32_t id, HandlerFunction fn) {
+    if (id < listeners.size())
+      listeners[id] = fn;
+  }
 
   InternValue read(std::uint32_t id) {
-    vals[id].inc();
-    return vals[id];
+    if (id < prog.var_count) {
+      vals[id].inc();
+      return vals[id];
+    } else {
+      return {{}, InternValue::NIL};
+    }
   }
 
   void tick() {
@@ -140,6 +153,8 @@ private:
   std::vector<std::uint32_t> dispatches{};
   std::vector<RingBuffer> histories{};
   std::vector<InternValue> current{};
+  bool has_error{false};
+  std::string_view error{};
 
   void init();
 
