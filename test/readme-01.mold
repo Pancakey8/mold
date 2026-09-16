@@ -1,0 +1,9 @@
+in temperature : Real
+
+def change := temperature - pre(temperature) ? 0.0
+
+signal warning :=
+  if temperature > 100.0 && change > 5.0
+  then log("Rapid temperature increase")
+
+out log(msg : String)

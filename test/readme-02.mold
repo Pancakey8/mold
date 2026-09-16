@@ -1,0 +1,31 @@
+extern impure now() : Date
+extern pure milli(n : Int) : Time
+
+in temperature : Real
+
+out alert(current : Real, when : Date)
+out toggle_ac(on_off : Bool)
+
+# Change in temperatures, 0 initially
+def last_temp := pre(temperature) ? 0
+def change := if pre(temperature) /= null
+              then temperature - last_temp
+              else 0
+
+def sample_time :=
+  if temperature /= pre(temperature)
+    then now()
+    else pre(sample_time) ? now()
+
+# ensure data is recent (<200ms)
+def recent := now() - sample_time < milli(200)
+
+def overload := recent && change > 5.0
+
+# dispatches on each increment
+signal alarm :=
+  if overload
+    then alert(temperature, sample_time)
+
+# dispatches once in a sequence of +5℃ increments
+signal ac_system := toggle_ac(overload)
