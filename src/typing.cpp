@@ -72,7 +72,7 @@ NodeId Typing::infer(NodeId id) {
             case BinaryOp::AND:
             case BinaryOp::OR: {
               if (!unify(ty_l, InternType::concrete(MoldType::BOOL)) ||
-                  !unify(ty_l, InternType::concrete(MoldType::BOOL))) {
+                  !unify(ty_r, InternType::concrete(MoldType::BOOL))) {
                 diags.emplace_back("Operation expects Bool, Bool",
                                    ast[id].source);
                 return push_node(
@@ -87,7 +87,7 @@ NodeId Typing::infer(NodeId id) {
             case BinaryOp::SHL:
             case BinaryOp::SHR: {
               if (!unify(ty_l, InternType::concrete(MoldType::INT)) ||
-                  !unify(ty_l, InternType::concrete(MoldType::INT))) {
+                  !unify(ty_r, InternType::concrete(MoldType::INT))) {
                 diags.emplace_back("Operation expects Int, Int",
                                    ast[id].source);
                 return push_node(
@@ -209,6 +209,8 @@ NodeId Typing::infer(NodeId id) {
           },
           [&](const IfElse &n) -> NodeId {
             auto cond = infer(n.cond);
+            auto un_res =
+                unify(inferred[cond.id], InternType::concrete(MoldType::BOOL));
 
             auto tru = infer(n.tru);
             auto fals = NODEID_NONE;
@@ -223,8 +225,7 @@ NodeId Typing::infer(NodeId id) {
               ty_res.nullable = true;
             }
 
-            if (!unify(inferred[cond.id],
-                       InternType::concrete(MoldType::BOOL))) {
+            if (!un_res) {
               diags.emplace_back("Condition must be boolean", ast[id].source);
               return push_node(IfElse{cond, tru, fals}, ast[id].source,
                                InternType::concrete(MoldType::FAIL));
@@ -370,12 +371,12 @@ NodeId Typing::infer(NodeId id) {
             return push_node(Signal{n.name, init}, ast[id].source, ty_init);
           },
           [&](const Output &n) -> NodeId {
-            std::flat_map<std::string_view, NodeId> params{};
+            std::vector<std::pair<std::string_view, NodeId>> params{};
             Signature sig{};
 
             for (auto [pname, pid] : n.params) {
               auto p = infer(pid);
-              params[pname] = p;
+              params.push_back({pname, p});
               sig.params.push_back(inferred[p.id]);
             }
 
@@ -386,12 +387,12 @@ NodeId Typing::infer(NodeId id) {
                              sig.ret);
           },
           [&](const Extern &n) -> NodeId {
-            std::flat_map<std::string_view, NodeId> params{};
+            std::vector<std::pair<std::string_view, NodeId>> params{};
             Signature sig{};
 
             for (auto [pname, pid] : n.params) {
               auto p = infer(pid);
-              params[pname] = p;
+              params.push_back({pname, p});
               sig.params.push_back(inferred[p.id]);
             }
 
@@ -670,7 +671,7 @@ std::string node_vec_str(const std::vector<NodeId> &vec,
 
 std::string string_vec_str(const std::vector<std::string_view> &vec);
 
-std::string map_str(const std::flat_map<std::string_view, NodeId> &m,
+std::string map_str(const std::vector<std::pair<std::string_view, NodeId>> &m,
                     const TypedNodePool &pool) {
   std::string res = "{";
   bool first = true;

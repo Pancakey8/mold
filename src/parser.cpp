@@ -344,12 +344,14 @@ NodeId Parser::parse_tl() {
     auto end_src = lexer.get()->source;
     lexer.next();
 
-    std::flat_map<std::string_view, NodeId> params;
+    std::vector<std::pair<std::string_view, NodeId>> params;
     for (auto &[pname, ptype] : param_pairs) {
-      if (params.contains(pname))
+      if (std::find_if(params.begin(), params.end(), [&pname](auto p) {
+            return p.first == pname;
+          }) != params.end())
         return pool.push(
             {Error{"Duplicate parameter name"}, pool[ptype].source});
-      params[pname] = ptype;
+      params.push_back({pname, ptype});
     }
 
     return pool.push(
@@ -411,12 +413,14 @@ NodeId Parser::parse_tl() {
     NodeId ret = parse_type();
     Source src = start->source + pool[ret].source;
 
-    std::flat_map<std::string_view, NodeId> params;
+    std::vector<std::pair<std::string_view, NodeId>> params;
     for (auto &[pname, ptype] : param_pairs) {
-      if (params.contains(pname))
+      if (std::find_if(params.begin(), params.end(), [&pname](auto p) {
+            return p.first == pname;
+          }) != params.end())
         return pool.push(
             {Error{"Duplicate parameter name"}, pool[ptype].source});
-      params[pname] = ptype;
+      params.push_back({pname, ptype});
     }
 
     return pool.push({Extern{name, std::move(params), ret, pure}, src});
@@ -459,4 +463,4 @@ NodeId Parser::parse_tl() {
   }
 }
 
-}; // namespace foo::internal
+}; // namespace mold::internal

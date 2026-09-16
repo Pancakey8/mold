@@ -108,7 +108,7 @@ struct Input {
 
 struct Output {
   std::string_view name;
-  std::flat_map<std::string_view, NodeId> params;
+  std::vector<std::pair<std::string_view, NodeId>> params;
 };
 
 struct Formula {
@@ -123,7 +123,7 @@ struct Signal {
 
 struct Extern {
   std::string_view name;
-  std::flat_map<std::string_view, NodeId> params;
+  std::vector<std::pair<std::string_view, NodeId>> params;
   NodeId ret;
   bool pure;
 };

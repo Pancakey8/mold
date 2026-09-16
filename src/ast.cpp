@@ -60,7 +60,7 @@ std::string string_vec_str(const std::vector<std::string_view> &vec) {
   return res;
 }
 
-std::string map_str(const std::flat_map<std::string_view, NodeId> &m,
+std::string map_str(const std::vector<std::pair<std::string_view, NodeId>> &m,
                     const NodePool &pool) {
   std::string res = "{";
   bool first = true;
@@ -148,4 +148,4 @@ std::string Node::show(const NodePool &pool) const {
 
   return std::format("{}({})", tag, fields);
 }
-}; // namespace foo::internal
+}; // namespace mold::internal
