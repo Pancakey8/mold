@@ -67,7 +67,7 @@ NodeId Typing::infer(NodeId id) {
                              InternType::concrete(MoldType::STRING));
           },
           [&](const LitNull &n) -> NodeId {
-            return push_node(n, ast[id].source, InternType::var(fresh()));
+            return push_node(n, ast[id].source, InternType::var(fresh(), true));
           },
           [&](const Ident &n) -> NodeId {
             return push_node(n, ast[id].source, lookup(n.name));
@@ -111,7 +111,7 @@ NodeId Typing::infer(NodeId id) {
             } break;
             case BinaryOp::EQ:
             case BinaryOp::NEQ: {
-              join(ast[id].source, l, r, ty_l, ty_r);
+              join(ast[id].source, l, r, ty_l, ty_r, false);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                InternType::concrete(MoldType::BOOL));
             } break;
@@ -208,7 +208,7 @@ NodeId Typing::infer(NodeId id) {
                 return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
                                  InternType::concrete(MoldType::FAIL));
               }
-              auto res = join(ast[id].source, l, r, ty_l, ty_r);
+              auto res = join(ast[id].source, l, r, ty_l, ty_r, ty_r.nullable);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
             } break;
             }
@@ -234,7 +234,8 @@ NodeId Typing::infer(NodeId id) {
             if (n.fals != NODEID_NONE) {
               fals = infer(n.fals);
               auto ty_fals = inferred[fals.id];
-              ty_res = join(ast[id].source, tru, fals, ty_tru, ty_fals);
+              ty_res = join(ast[id].source, tru, fals, ty_tru, ty_fals,
+                            ty_tru.nullable || ty_fals.nullable);
             } else {
               ty_res.nullable = true;
             }
@@ -375,6 +376,7 @@ NodeId Typing::infer(NodeId id) {
             } else if (n.base == "Event") {
               base = MoldType::EVENT;
             }
+            // std::println("Resolving {} {}", n.base, n.nullable);
             return push_node(n, ast[id].source,
                              InternType::concrete(base, n.nullable));
           },
@@ -538,12 +540,12 @@ bool Typing::unify(InternType a, InternType b) {
 }
 
 InternType Typing::join(Source from, NodeId l, NodeId r, InternType a,
-                        InternType b) {
-  auto res = InternType::var(fresh(), a.nullable || b.nullable);
+                        InternType b, bool res_nullable) {
+  auto res = InternType::var(fresh(), res_nullable);
 #define X(T)                                                                   \
   {{MoldType::T, a.nullable},                                                  \
    {MoldType::T, b.nullable},                                                  \
-   {MoldType::T, a.nullable || b.nullable}},
+   {MoldType::T, res_nullable}},
   Constraint c{.nodes = {l, r, NODEID_NONE},
                .vars = {a, b, res},
                .cases = {TYPE_BASE_LIST(X)},
@@ -551,10 +553,10 @@ InternType Typing::join(Source from, NodeId l, NodeId r, InternType a,
 #undef X
   c.cases.push_back({{MoldType::INT, a.nullable, MoldType::REAL},
                      {MoldType::REAL, b.nullable},
-                     {MoldType::REAL, a.nullable || b.nullable}});
+                     {MoldType::REAL, res_nullable}});
   c.cases.push_back({{MoldType::REAL, a.nullable},
                      {MoldType::INT, b.nullable, MoldType::REAL},
-                     {MoldType::REAL, a.nullable || b.nullable}});
+                     {MoldType::REAL, res_nullable}});
   ctrs.push_back(std::move(c));
   propagate();
   return res;
@@ -694,6 +696,8 @@ InternType Typing::lookup(std::string_view var) {
 }
 
 bool Typing::assignable(NodeId arg_id, InternType arg, InternType param) {
+  if (arg.nullable && !param.nullable)
+    return false;
   if (unify(arg, param))
     return true;
   auto ab = get_base(arg), pb = get_base(param);

@@ -8,7 +8,7 @@ int main() {
     "def bar := pre(bar) + 5\n"
     "def baz := pre(baz) + pre(y)\n"
     "def y := 3\n"
-    "extern pure a(x : Real) : Real\n"
+    "extern pure a(x : Real?) : Real\n"
     "def qux := a(pre(qux))\n"
   };
   // clang-format on

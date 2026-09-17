@@ -303,14 +303,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+        stack.push(InternValue{{.i = l.data.i << r.data.i}, InternValue::INT});
+      } else {
         has_error = true;
         error = "Type error in shift left";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.i = l.data.i << r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
       ip++;
@@ -320,14 +323,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+        stack.push(InternValue{{.i = l.data.i >> r.data.i}, InternValue::INT});
+      } else {
         has_error = true;
         error = "Type error in shift right";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.i = l.data.i >> r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
       ip++;
@@ -337,14 +343,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+        stack.push(InternValue{{.i = l.data.i & r.data.i}, InternValue::INT});
+      } else {
         has_error = true;
         error = "Type error in bitwise and";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.i = l.data.i & r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
       ip++;
@@ -354,14 +363,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::INT && r.tag == InternValue::INT)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
+        stack.push(InternValue{{.i = l.data.i | r.data.i}, InternValue::INT});
+      } else {
         has_error = true;
         error = "Type error in bitwise or";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.i = l.data.i | r.data.i}, InternValue::INT});
       l.dec();
       r.dec();
       ip++;
@@ -371,14 +383,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::BOOL && r.tag == InternValue::BOOL) {
+        stack.push(InternValue{{.b = l.data.b && r.data.b}, InternValue::BOOL});
+      } else {
         has_error = true;
         error = "Type error in boolean and";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.b = l.data.b && r.data.b}, InternValue::BOOL});
       l.dec();
       r.dec();
       ip++;
@@ -388,14 +403,17 @@ void Interpreter::run() {
       stack.pop();
       auto l = stack.top();
       stack.pop();
-      if (!(l.tag == InternValue::BOOL && r.tag == InternValue::BOOL)) {
+      if (l.tag == InternValue::NIL || r.tag == InternValue::NIL) {
+        stack.push(InternValue{{}, InternValue::NIL});
+      } else if (l.tag == InternValue::BOOL && r.tag == InternValue::BOOL) {
+        stack.push(InternValue{{.b = l.data.b || r.data.b}, InternValue::BOOL});
+      } else {
         has_error = true;
         error = "Type error in boolean or";
         l.dec();
         r.dec();
         goto exit;
       }
-      stack.push(InternValue{{.b = l.data.b || r.data.b}, InternValue::BOOL});
       l.dec();
       r.dec();
       ip++;

@@ -36,9 +36,9 @@ std::vector<HInstr> Compiler::run() {
       compile(id);
   }
 
-  for (auto &i : instrs) {
-    std::println("{}", i.show());
-  }
+  // for (auto &i : instrs) {
+  //   std::println("{}", i.show());
+  // }
 
   return std::move(instrs);
 }

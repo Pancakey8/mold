@@ -8,6 +8,7 @@ set(TEST_SOURCES
   builtins.cpp
   purity.cpp
   name_res.cpp
+  null_compat.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

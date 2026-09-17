@@ -150,7 +150,8 @@ private:
   [[nodiscard]]
   bool unify(InternType a, InternType b);
 
-  InternType join(Source from, NodeId l, NodeId r, InternType a, InternType b);
+  InternType join(Source from, NodeId l, NodeId r, InternType a, InternType b,
+                  bool res_nullable);
 
   bool compatible(InternType have, MoldType exp);
 
