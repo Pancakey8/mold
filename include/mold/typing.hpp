@@ -169,6 +169,4 @@ private:
   NodeId infer(NodeId id);
 };
 
-SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped);
-
 }; // namespace mold::internal

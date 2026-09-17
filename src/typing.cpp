@@ -45,6 +45,8 @@ std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
       std::move(diags));
 }
 
+std::optional<std::string_view> ns_of(MoldType::Base base);
+
 NodeId Typing::infer(NodeId id) {
   return std::visit(
       overload{
@@ -251,27 +253,58 @@ NodeId Typing::infer(NodeId id) {
             return push_node(n, ast[id].source, t);
           },
           [&](const FuncCall &n) -> NodeId {
-            if (!is_builtin(n.name) && !sorting.tls_names.contains(n.name)) {
+            auto name = n.name;
+            bool resolved{false};
+            NodeId first{NODEID_NONE};
+
+            if (is_builtin(n.name) || sorting.tls_names.contains(n.name))
+              resolved = true;
+
+            if (!resolved && !n.params.empty()) {
+              first = infer(n.params.front());
+              if (!inferred[first.id].is_var) {
+                if (auto ns = ns_of(inferred[first.id].base)) {
+                  auto exp = std::format("{}.{}", *ns, n.name);
+                  if (auto it = sorting.tls_names.find(exp);
+                      it != sorting.tls_names.end()) {
+                    name = it->first;
+                    resolved = true;
+                  } else if (auto it = sigs.find(exp); it != sigs.end()) {
+                    name = it->first;
+                    resolved = true;
+                  }
+                }
+              }
+            }
+
+            if (!resolved) {
               diags.emplace_back("Calling non-function", ast[id].source);
-              return push_node(FuncCall{n.name, {}}, ast[id].source,
+              return push_node(FuncCall{name, {}}, ast[id].source,
                                InternType::concrete(MoldType::FAIL));
             }
 
-            if (sorting.tls_names.contains(n.name)) {
-              auto callee_id = sorting.tls_names.at(n.name);
+            if (sorting.tls_names.contains(name)) {
+              auto callee_id = sorting.tls_names.at(name);
               const auto &callee = ast[callee_id];
               if (auto fn = std::get_if<Function>(&callee.data)) {
                 if (fn->params.size() != n.params.size()) {
                   diags.emplace_back(
                       "Parameter counts must match on function call",
                       ast[id].source);
-                  return push_node(FuncCall{n.name, {}}, ast[id].source,
+                  return push_node(FuncCall{name, {}}, ast[id].source,
                                    InternType::concrete(MoldType::FAIL));
                 }
                 std::vector<NodeId> params{};
                 std::vector<std::string_view> names{};
-                for (auto p : n.params) {
-                  params.push_back(infer(p));
+                if (first == NODEID_NONE) {
+                  for (auto p : n.params) {
+                    params.push_back(infer(p));
+                  }
+                } else {
+                  params.push_back(first);
+                  for (auto p : n.params | std::views::drop(1)) {
+                    params.push_back(infer(p));
+                  }
                 }
                 for (std::size_t i = 0; i < params.size(); ++i) {
                   names.push_back(fn->params[i]);
@@ -285,33 +318,44 @@ NodeId Typing::infer(NodeId id) {
               }
             }
 
-            if (sigs.contains(n.name)) {
-              const auto &sig = sigs.at(n.name);
+            if (sigs.contains(name)) {
+              const auto &sig = sigs.at(name);
               if (sig.params.size() != n.params.size()) {
                 diags.emplace_back(
                     "Parameter counts must match on function call",
                     ast[id].source);
-                return push_node(FuncCall{n.name, {}}, ast[id].source,
+                return push_node(FuncCall{name, {}}, ast[id].source,
                                  InternType::concrete(MoldType::FAIL));
               }
               std::vector<NodeId> params{};
+              if (first == NODEID_NONE) {
+                for (std::size_t i = 0; i < n.params.size(); ++i) {
+                  auto p = infer(n.params[i]);
+                  params.push_back(p);
+                }
+              } else {
+                params.push_back(first);
+                for (std::size_t i = 1; i < n.params.size(); ++i) {
+                  auto p = infer(n.params[i]);
+                  params.push_back(p);
+                }
+              }
               for (std::size_t i = 0; i < n.params.size(); ++i) {
-                auto p = infer(n.params[i]);
+                auto p = params[i];
                 if (!assignable(p, inferred[p.id], sig.params[i])) {
                   diags.emplace_back(
                       "Parameter type doesn't fit passed argument",
                       ast[n.params[i]].source);
-                  return push_node(FuncCall{n.name, {}}, ast[id].source,
+                  return push_node(FuncCall{name, {}}, ast[id].source,
                                    InternType::concrete(MoldType::FAIL));
                 }
-                params.push_back(p);
               }
-              return push_node(FuncCall{n.name, std::move(params)},
+              return push_node(FuncCall{name, std::move(params)},
                                ast[id].source, sig.ret);
             }
 
             diags.emplace_back("Calling non-function", ast[id].source);
-            return push_node(FuncCall{n.name, {}}, ast[id].source,
+            return push_node(FuncCall{name, {}}, ast[id].source,
                              InternType::concrete(MoldType::FAIL));
           },
           [&](const TypeName &n) -> NodeId {
@@ -660,6 +704,27 @@ bool Typing::assignable(NodeId arg_id, InternType arg, InternType param) {
   return false;
 }
 
+std::optional<std::string_view> ns_of(MoldType::Base base) {
+  switch (base) {
+  case MoldType::FAIL:
+    return {};
+  case MoldType::INT:
+    return "Int";
+  case MoldType::REAL:
+    return "Real";
+  case MoldType::BOOL:
+    return "Bool";
+  case MoldType::STRING:
+    return "String";
+  case MoldType::DATE:
+    return "Date";
+  case MoldType::TIME:
+    return "Time";
+  case MoldType::EVENT:
+    return "Event";
+  }
+}
+
 std::string MoldType::show() const {
   std::string_view base_str;
   switch (base) {
@@ -826,78 +891,6 @@ std::string_view TypedNode::toplevel_name() const {
         }
       },
       data);
-}
-
-std::flat_map<NodeId, std::vector<NodeId>>
-migrate_deps(const std::flat_map<NodeId, std::vector<NodeId>> &untyped_deps,
-             const std::flat_map<NodeId, NodeId> &sort_to_ty) {
-  std::flat_map<NodeId, std::vector<NodeId>> typed_deps;
-
-  for (const auto &[sid, tid] : sort_to_ty) {
-    std::vector<NodeId> targets;
-    std::vector<NodeId> stack;
-    std::flat_set<NodeId> visited;
-
-    if (auto it = untyped_deps.find(sid); it != untyped_deps.end()) {
-      for (auto nbor : it->second) {
-        stack.push_back(nbor);
-      }
-    }
-
-    while (!stack.empty()) {
-      auto curr = stack.back();
-      stack.pop_back();
-
-      if (!visited.insert(curr).second) {
-        continue;
-      }
-
-      if (sort_to_ty.contains(curr)) {
-        targets.push_back(sort_to_ty.at(curr));
-      } else {
-        if (auto it = untyped_deps.find(curr); it != untyped_deps.end()) {
-          for (auto neighbor : it->second) {
-            stack.push_back(neighbor);
-          }
-        }
-      }
-    }
-
-    std::sort(targets.begin(), targets.end());
-    targets.erase(std::unique(targets.begin(), targets.end()), targets.end());
-
-    if (!targets.empty()) {
-      typed_deps[tid] = std::move(targets);
-    }
-  }
-
-  return typed_deps;
-}
-
-SortResult migrate_sort(const TypedAST &ast, const SortResult &untyped) {
-  std::flat_map<NodeId, NodeId> sort_to_ty{};
-
-  for (std::size_t i = 0; i < ast.tls.size(); ++i) {
-    if (ast.tls[i] == NODEID_NONE)
-      continue;
-    sort_to_ty[untyped.order[i]] = ast.tls[i];
-  }
-
-  SortResult typed{};
-  for (auto [name, sid] : untyped.tls_names) {
-    if (sort_to_ty.contains(sid))
-      typed.tls_names[name] = sort_to_ty.at(sid);
-  }
-
-  typed.order.reserve(untyped.order.size());
-  for (auto sid : untyped.order) {
-    if (sort_to_ty.contains(sid))
-      typed.order.push_back(sort_to_ty.at(sid));
-  }
-
-  typed.deps = migrate_deps(untyped.deps, sort_to_ty);
-
-  return typed;
 }
 
 }; // namespace mold::internal

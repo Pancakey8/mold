@@ -68,8 +68,7 @@ Script::of_string(std::string_view input) {
 
     return std::unexpected(std::move(diags));
   }
-  auto typed_sort = migrate_sort(typed, sorting);
-  auto hir = Compiler{typed, typed_sort}.run();
+  auto hir = Compiler{typed}.run();
   // for (const auto &instr : hir) {
   //   std::println("{}", instr.show());
   // }

@@ -22,8 +22,32 @@ InternValue builtin_date_now(std::int16_t, InternValue *) {
   return {{.d = t}, InternValue::DATE};
 }
 
+InternValue builtin_int_max(std::int16_t, InternValue *argv) {
+  auto l = argv[0].data.i;
+  auto r = argv[1].data.i;
+  return {{.i = std::max(l, r)}, InternValue::INT};
+}
+
+InternValue builtin_real_max(std::int16_t, InternValue *argv) {
+  auto l = argv[0].data.r;
+  auto r = argv[1].data.r;
+  return {{.r = std::max(l, r)}, InternValue::REAL};
+}
+
 // clang-format off
 static std::vector<Builtin> BUILTINS {
+  {"Int.max",
+   {{MoldType::INT, false}, {MoldType::INT, false}},
+   {MoldType::INT, false},
+   true,
+   builtin_int_max},
+
+  {"Real.max",
+   {{MoldType::REAL, false}, {MoldType::REAL, false}},
+   {MoldType::REAL, false},
+   true,
+   builtin_real_max},
+
   {"String.length",
    {{MoldType::STRING, false}},
    {MoldType::INT, false},

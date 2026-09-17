@@ -7,6 +7,7 @@ set(TEST_SOURCES
   readme-02.cpp
   builtins.cpp
   purity.cpp
+  name_res.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

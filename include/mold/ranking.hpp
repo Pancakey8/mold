@@ -8,6 +8,12 @@
 
 namespace mold::internal {
 
-std::flat_map<NodeId, std::size_t> ranks_of(const SortResult &sort);
-
+struct Ranking {
+  std::flat_map<NodeId, std::vector<NodeId>> deps;
+  std::flat_map<NodeId, std::uint16_t> ranks;
+  std::flat_map<NodeId, char> builtins{};
 };
+
+Ranking ranks_of(const TypedAST &ast);
+
+}; // namespace mold::internal

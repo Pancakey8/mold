@@ -7,32 +7,37 @@
 #include <cstddef>
 #include <flat_map>
 #include <format>
+#include <print>
 #include <ranges>
 #include <variant>
 
 namespace mold::internal {
 
-std::vector<NodeId> get_builtin_deps(const TypedAST &ast);
-
 std::vector<HInstr> Compiler::run() {
-  ranks = ranks_of(sorting);
+  ranking = ranks_of(ast);
 
-  for (auto [id, r] : ranks) {
+  for (auto [id, r] : ranking.ranks) {
     if (r == 0)
       compile(id);
   }
 
-  auto builtin_deps = get_builtin_deps(ast);
-  for (auto id : builtin_deps) {
-    instrs.emplace_back(HInstr::Mp{ast[id].toplevel_name(),
-                                   static_cast<std::uint16_t>(ranks.at(id))});
+  for (auto [id, calls] : ranking.builtins) {
+    if (!calls)
+      continue;
+    instrs.emplace_back(
+        HInstr::Mp{ast[id].toplevel_name(),
+                   static_cast<std::uint16_t>(ranking.ranks.at(id))});
   }
 
   instrs.emplace_back(HInstr::Term{});
 
-  for (auto [id, r] : ranks) {
+  for (auto [id, r] : ranking.ranks) {
     if (r != 0)
       compile(id);
+  }
+
+  for (auto &i : instrs) {
+    std::println("{}", i.show());
   }
 
   return std::move(instrs);
@@ -122,11 +127,11 @@ void Compiler::compile(NodeId id) {
             instrs.emplace_back(HInstr::Pull{n.name});
             auto l = fresh_label();
             instrs.emplace_back(HInstr::JumpFalse{l});
-            if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
+            if (auto it = ranking.deps.find(id); it != ranking.deps.end()) {
               for (auto dep : it->second) {
                 instrs.emplace_back(
                     HInstr::Mp{ast[dep].toplevel_name(),
-                               static_cast<uint16_t>(ranks.at(dep))});
+                               static_cast<uint16_t>(ranking.ranks.at(dep))});
               }
             }
             instrs.emplace_back(HInstr::Label{l});
@@ -139,11 +144,11 @@ void Compiler::compile(NodeId id) {
             instrs.emplace_back(HInstr::Pull{n.name});
             auto l = fresh_label();
             instrs.emplace_back(HInstr::JumpFalse{l});
-            if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
+            if (auto it = ranking.deps.find(id); it != ranking.deps.end()) {
               for (auto dep : it->second) {
-                instrs.emplace_back(
-                    HInstr::Mp{ast[dep].toplevel_name(),
-                               static_cast<std::uint16_t>(ranks.at(dep))});
+                instrs.emplace_back(HInstr::Mp{
+                    ast[dep].toplevel_name(),
+                    static_cast<std::uint16_t>(ranking.ranks.at(dep))});
               }
             }
             instrs.emplace_back(HInstr::Label{l});
@@ -156,11 +161,11 @@ void Compiler::compile(NodeId id) {
             instrs.emplace_back(HInstr::Pull{n.name});
             auto l = fresh_label();
             instrs.emplace_back(HInstr::JumpFalse{l});
-            if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
+            if (auto it = ranking.deps.find(id); it != ranking.deps.end()) {
               for (auto dep : it->second) {
-                instrs.emplace_back(
-                    HInstr::Mp{ast[dep].toplevel_name(),
-                               static_cast<std::uint16_t>(ranks.at(dep))});
+                instrs.emplace_back(HInstr::Mp{
+                    ast[dep].toplevel_name(),
+                    static_cast<std::uint16_t>(ranking.ranks.at(dep))});
               }
             }
             instrs.emplace_back(HInstr::Dispatch{n.name});
@@ -169,11 +174,11 @@ void Compiler::compile(NodeId id) {
           },
           [&](const Extern &n) {
             if (!n.pure) {
-              if (auto it = sorting.deps.find(id); it != sorting.deps.end()) {
+              if (auto it = ranking.deps.find(id); it != ranking.deps.end()) {
                 for (auto dep : it->second) {
-                  instrs.emplace_back(
-                      HInstr::Mp{ast[dep].toplevel_name(),
-                                 static_cast<std::uint16_t>(ranks.at(dep))});
+                  instrs.emplace_back(HInstr::Mp{
+                      ast[dep].toplevel_name(),
+                      static_cast<std::uint16_t>(ranking.ranks.at(dep))});
                 }
               }
             }
@@ -452,81 +457,6 @@ std::string Instr::show() const {
   auto arg_i = std::bit_cast<std::int32_t>(arg);
 
   return std::format("{} {}/{}, {}", op_name, arg_u, arg_i, ext);
-}
-
-bool is_impure_builtin(std::string_view name) {
-  if (auto idx = is_builtin(name)) {
-    return !get_builtins()[*idx].is_pure;
-  }
-  return false;
-}
-
-bool has_impure_builtin(NodeId id, const TypedAST &ast) {
-  if (id == NODEID_NONE) {
-    return false;
-  }
-
-  return std::visit(
-      overload{
-          [&](const LitInt &) { return false; },
-          [&](const LitReal &) { return false; },
-          [&](const LitBool &) { return false; },
-          [&](const LitString &) { return false; },
-          [&](const LitNull &) { return false; },
-          [&](const Ident &) { return false; },
-          [&](const PreVal &) { return false; },
-          [&](const TypeName &) { return false; },
-          [&](const Error &) { return false; },
-          [&](const BinaryOp &n) {
-            return has_impure_builtin(n.left, ast) ||
-                   has_impure_builtin(n.right, ast);
-          },
-          [&](const LetIn &n) {
-            return has_impure_builtin(n.init, ast) ||
-                   has_impure_builtin(n.body, ast);
-          },
-          [&](const IfElse &n) {
-            return has_impure_builtin(n.cond, ast) ||
-                   has_impure_builtin(n.tru, ast) ||
-                   has_impure_builtin(n.fals, ast);
-          },
-          [&](const FuncCall &n) {
-            if (is_impure_builtin(n.name)) {
-              return true;
-            }
-            for (auto p : n.params) {
-              if (has_impure_builtin(p, ast)) {
-                return true;
-              }
-            }
-            return false;
-          },
-          [&](const Input &n) { return has_impure_builtin(n.type, ast); },
-          [&](const Output &n) { return false; },
-          [&](const Formula &n) { return has_impure_builtin(n.init, ast); },
-          [&](const Signal &n) { return has_impure_builtin(n.init, ast); },
-          [&](const Extern &n) { return false; },
-          [&](const Function &n) { return false; },
-          [&](const Inline &n) {
-            for (auto p : n.params) {
-              if (has_impure_builtin(p, ast)) {
-                return true;
-              }
-            }
-            return has_impure_builtin(n.formula, ast);
-          },
-      },
-      ast[id].data);
-}
-
-std::vector<NodeId> get_builtin_deps(const TypedAST &ast) {
-  std::vector<NodeId> impure_tls;
-  for (auto id : ast.tls) {
-    if (id != NODEID_NONE && has_impure_builtin(id, ast)) {
-      impure_tls.push_back(id);
-    }
-  }
-  return impure_tls;
 }
 
 } // namespace mold::internal

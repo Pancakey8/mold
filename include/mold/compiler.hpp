@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.hpp"
+#include "mold/ranking.hpp"
 #include "sort.hpp"
 #include "typing.hpp"
 #include <cstdint>
@@ -264,19 +265,17 @@ struct SymbolTable {
 
 class Compiler {
 public:
-  Compiler(const TypedAST &ast, const SortResult &sorting)
-      : ast(ast), sorting(sorting) {}
+  Compiler(const TypedAST &ast) : ast(ast) {}
 
   std::vector<HInstr> run();
 
 private:
   const TypedAST &ast;
-  const SortResult &sorting;
 
   std::vector<HInstr> instrs{};
   std::vector<std::string_view> locals{};
   std::unordered_set<std::string_view> events{};
-  std::flat_map<NodeId, std::size_t> ranks{};
+  Ranking ranking{};
 
   void compile(NodeId id);
   void compile_binop(BinaryOp::Kind id);
