@@ -50,7 +50,14 @@ void Lexer::next() {
   char c = advance();
 
   if (is_alpha(c) || c == '_') {
-    while (!eof() && (is_alnum(peek()) || peek() == '_')) {
+    bool can_dot{true};
+    while (!eof() && (is_alnum(peek()) || peek() == '_' || peek() == '.')) {
+      if (peek() == '.') {
+        if (!can_dot) break;
+        can_dot = false;
+      } else {
+        can_dot = true;
+      }
       advance();
     }
     std::string_view value = input.substr(start, cursor - start);

@@ -5,6 +5,8 @@ set(TEST_SOURCES
   ambiguity.cpp
   readme-01.cpp
   readme-02.cpp
+  builtins.cpp
+  purity.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

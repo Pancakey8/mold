@@ -1,4 +1,5 @@
 #include "mold/interpreter.hpp"
+#include "mold/builtins.hpp"
 #include "mold/utils.hpp"
 #include <algorithm>
 #include <cassert>
@@ -564,8 +565,12 @@ void Interpreter::run() {
         args[i] = stack.top();
         stack.pop();
       }
-      if (exts[instr.arg.u]) {
+      auto builtins = get_builtins();
+      if (instr.arg.u < exts.size() && exts[instr.arg.u]) {
         auto res = exts[instr.arg.u](argc, args.data());
+        stack.push(res);
+      } else if (~instr.arg.u < builtins.size()) {
+        auto res = builtins[~instr.arg.u].impl(argc, args.data());
         stack.push(res);
       } else {
         stack.push({{}, InternValue::NIL});

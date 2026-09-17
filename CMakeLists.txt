@@ -13,6 +13,7 @@ add_library(mold
   src/ranking.cpp
   src/interpreter.cpp
   src/script.cpp
+  src/builtins.cpp
 )
 
 target_include_directories(mold PUBLIC

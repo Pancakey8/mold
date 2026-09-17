@@ -1,5 +1,6 @@
 #include "mold/typing.hpp"
 #include "mold/ast.hpp"
+#include "mold/builtins.hpp"
 #include "mold/diagnostics.hpp"
 #include "mold/sort.hpp"
 #include "mold/utils.hpp"
@@ -11,6 +12,15 @@
 namespace mold::internal {
 
 std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
+  for (const auto &b : get_builtins()) {
+    Signature sig{};
+    for (const auto &p : b.params) {
+      sig.params.push_back(InternType::concrete(p.base, p.nullable));
+    }
+    sig.ret = InternType::concrete(b.ret.base, b.ret.nullable);
+    sigs[b.name] = std::move(sig);
+  }
+
   std::vector<NodeId> tls{};
 
   for (auto id : sorting.order) {
@@ -241,36 +251,41 @@ NodeId Typing::infer(NodeId id) {
             return push_node(n, ast[id].source, t);
           },
           [&](const FuncCall &n) -> NodeId {
-            if (!sorting.tls_names.contains(n.name)) {
+            if (!is_builtin(n.name) && !sorting.tls_names.contains(n.name)) {
               diags.emplace_back("Calling non-function", ast[id].source);
               return push_node(FuncCall{n.name, {}}, ast[id].source,
                                InternType::concrete(MoldType::FAIL));
             }
-            auto callee_id = sorting.tls_names.at(n.name);
-            const auto &callee = ast[callee_id];
-            if (auto fn = std::get_if<Function>(&callee.data)) {
-              if (fn->params.size() != n.params.size()) {
-                diags.emplace_back(
-                    "Parameter counts must match on function call",
-                    ast[id].source);
-                return push_node(FuncCall{n.name, {}}, ast[id].source,
-                                 InternType::concrete(MoldType::FAIL));
+
+            if (sorting.tls_names.contains(n.name)) {
+              auto callee_id = sorting.tls_names.at(n.name);
+              const auto &callee = ast[callee_id];
+              if (auto fn = std::get_if<Function>(&callee.data)) {
+                if (fn->params.size() != n.params.size()) {
+                  diags.emplace_back(
+                      "Parameter counts must match on function call",
+                      ast[id].source);
+                  return push_node(FuncCall{n.name, {}}, ast[id].source,
+                                   InternType::concrete(MoldType::FAIL));
+                }
+                std::vector<NodeId> params{};
+                std::vector<std::string_view> names{};
+                for (auto p : n.params) {
+                  params.push_back(infer(p));
+                }
+                for (std::size_t i = 0; i < params.size(); ++i) {
+                  names.push_back(fn->params[i]);
+                  locals.push_back({fn->params[i], inferred[params[i].id]});
+                }
+                auto form = infer(fn->init);
+                locals.resize(locals.size() - params.size());
+                return push_node(
+                    Inline{std::move(names), std::move(params), form},
+                    ast[id].source, inferred[form.id]);
               }
-              std::vector<NodeId> params{};
-              std::vector<std::string_view> names{};
-              for (auto p : n.params) {
-                params.push_back(infer(p));
-              }
-              for (std::size_t i = 0; i < params.size(); ++i) {
-                names.push_back(fn->params[i]);
-                locals.push_back({fn->params[i], inferred[params[i].id]});
-              }
-              auto form = infer(fn->init);
-              locals.resize(locals.size() - params.size());
-              return push_node(
-                  Inline{std::move(names), std::move(params), form},
-                  ast[id].source, inferred[form.id]);
-            } else if (sigs.contains(n.name)) {
+            }
+
+            if (sigs.contains(n.name)) {
               const auto &sig = sigs.at(n.name);
               if (sig.params.size() != n.params.size()) {
                 diags.emplace_back(
@@ -293,11 +308,11 @@ NodeId Typing::infer(NodeId id) {
               }
               return push_node(FuncCall{n.name, std::move(params)},
                                ast[id].source, sig.ret);
-            } else {
-              diags.emplace_back("Calling non-function", ast[id].source);
-              return push_node(FuncCall{n.name, {}}, ast[id].source,
-                               InternType::concrete(MoldType::FAIL));
             }
+
+            diags.emplace_back("Calling non-function", ast[id].source);
+            return push_node(FuncCall{n.name, {}}, ast[id].source,
+                             InternType::concrete(MoldType::FAIL));
           },
           [&](const TypeName &n) -> NodeId {
             MoldType::Base base{MoldType::FAIL};
