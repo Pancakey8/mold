@@ -43,6 +43,13 @@
          :recursive t
          :publishing-function org-html-publish-to-html)
 
+	    ("docs-imgs"
+	     :base-directory "./doc/"
+	     :base-extension "png"
+	     :publishing-directory "./web-doc/"
+	     :recursive t
+	     :publishing-function org-publish-attachment)
+
         ("html-pages"
 	     :base-directory "./doc/"
 	     :base-extension "css\\|html"

@@ -17,7 +17,7 @@ graph represents a "providing" relation. Example:
   def bar := foo + y
 #+END_SRC
 
-#+BEGIN_SRC dot :file ../img/doc-30-graph-1.png :exports none :results silent
+#+BEGIN_SRC dot :file ./img/doc-30-graph-1.png :exports none :results silent
   digraph G {
     rankdir = LR
 
@@ -27,7 +27,7 @@ graph represents a "providing" relation. Example:
   }
 #+END_SRC
 
-[[file:../img/doc-30-graph-1.png]]
+[[file:./img/doc-30-graph-1.png]]
 
 Dependencies guide evaluation. When the host feeds a new value for
 ~x~, the graph suggests that ~foo~ must be evaluated. To illustrate,
