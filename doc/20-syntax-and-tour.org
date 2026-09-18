@@ -1,0 +1,95 @@
+* Language Tour
+
+This page serves as a quick overview of syntax and simple features,
+it's not a comprehensive list. See [[file:60-cheatsheet.org][Cheatsheet]] for a more comprehensive
+reference.
+
+** Comments
+
+Comments start with ~#~, no inline comments exist.
+
+#+BEGIN_SRC text
+  # Hello!
+#+END_SRC
+
+** Literals
+
+#+BEGIN_SRC text
+  15, -8 # Integers
+  2.718 # Real numbers
+  true, false # Booleans
+  "Foo bar" # Strings
+  null # Null value (For any nullable type)
+#+END_SRC
+
+** Variables
+
+Variable names consist of ASCII characters. The first character is a
+letter (~a-z, A-Z~) or an underscore (~_~). The remaining letters are
+alphanumeric (~a-z, A-Z, 0-9~), underscore (~_~), or dots (~.~). Two
+dots can't appear in a row.
+
+#+BEGIN_SRC text
+  hello
+  _foo
+  test12
+  Date.now
+#+END_SRC
+
+** Expressions
+
+Expressions appear in formulae and signals.
+
+#+BEGIN_SRC text
+  # Operators:
+  true && false
+  2 + 3
+  null ? "Hello"
+  7 /= 2
+
+  # Function calls
+  f(2, 3)
+  # also serves to construct events
+  # in the same file: out alert(urgency : Int)
+  alert(3)
+
+  # Let bindings
+  let x := 3 in x + 1
+
+  # If-then-else
+  if n % 2 = 0 then n / 2 else 3 * n + 1
+  # may drop else branch, equivalent to `else null`
+  if n > 10 then foo()
+
+  # Previous values
+  pre(x)
+  # can specify depth (how far back?)
+  pre(foo, 2)
+#+END_SRC
+
+** Declarations
+
+A Mold program consists of a combination of declarations. There are
+six types of declarations.
+
+#+BEGIN_SRC text
+  # Taken from host `feed("x", ...)`
+  in x : Int
+
+  # Defines formula, host can read result with `read("foo")`
+  def foo := x + 1
+
+  # Defines event bound to host's handler `f` from `on("create_log", f)`
+  out create_log(entry : String)
+
+  # Dispatches an event to the host
+  signal info_logger := if needs_info then create_log("[INFO]: " + message)
+
+  # Defines function implemented by host's handler `g` from `implement("read_db", g)`
+  extern pure read_db(query : String) : String
+  # also comes in impure variant
+  extern impure current_time() : Date
+
+  # Define functions
+  function f(x, y) := x + y * 2
+#+END_SRC

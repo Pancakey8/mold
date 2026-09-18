@@ -6,6 +6,9 @@ int main() {
     "def bar : Real := pre(foo) ? 1.0\n"
     "def foo : Real? := pre(bar) + 1.0\n"
     "def baz : Int? := max(pre(baz), x)\n"
+    "def p : String? := pre(q) + pre(r)\n"
+    "def q := pre(p)\n"
+    "def r := pre(p)\n"
     "in x : Int\n"
   };
   // clang-format on

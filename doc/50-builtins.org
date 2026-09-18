@@ -1,0 +1,29 @@
+* Builtins
+
+#+NAME: process-table
+#+BEGIN_SRC emacs-lisp :var data="" :results value table :exports none
+  (cons '("Name" "Parameters" "Returns" "Purity" "Description")
+        (cons 'hline
+              (mapcar (lambda (line) (split-string line "\t"))
+                      (split-string data "\n" t))))
+#+END_SRC
+
+#+BEGIN_SRC bash :var FILE="../include/mold/builtins_table.h" :results output :post process-table(data=*this*) :exports results
+  cpp -P \
+      -D'BUILTIN(name,pars,ret,pure,impl,doc)=name @ pars @ ret @ PURITY##pure() @ doc' \
+      -D'PURITYtrue()=Pure' \
+      -D'PURITYfalse()=Impure' \
+      -D'PARAMS(...)=__VA_ARGS__' \
+      -D'TY(a, b)=TY_##b(a)' \
+      -D'TY_true(a)=a?' \
+      -D'TY_false(a)=a' \
+      $FILE | sed -E 's/[[:space:]]*@[[:space:]]*/\t/g; s/"//g; /^[[:space:]]*$/d'
+#+END_SRC
+
+#+RESULTS:
+| Name          | Parameters   | Returns | Purity | Description                                   |
+|---------------+--------------+---------+--------+-----------------------------------------------|
+| Int.max       | INT?, INT?   | INT?    | Pure   | Returns the larger parameter for integers     |
+| Real.max      | REAL?, REAL? | REAL?   | Pure   | Returns the larger parameter for real numbers |
+| String.length | STRING?      | INT     | Pure   | Returns the length of a string                |
+| Date.now      |              | DATE    | Impure | Returns the current date                      |

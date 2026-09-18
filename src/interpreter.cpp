@@ -46,6 +46,8 @@ void Interpreter::store(std::uint32_t id, InternValue value) {
   if (vals[id] != value) {
     dirty[id] = true;
     current[id] = value;
+  } else {
+    value.dec();
   }
 }
 

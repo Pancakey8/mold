@@ -1,0 +1,11 @@
+out alert(msg : String)
+out log(msg : String, temp : Int)
+# Temperature (℃)
+in temp : Int
+
+signal overheating :=
+  if temp > 70
+    then if temp - pre(temp) > 5
+      then alert("Overheating fast")
+      else alert("High temperature")
+    else log("Chill temperature", temp)

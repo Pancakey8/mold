@@ -1,0 +1,53 @@
+* Getting Started
+
+Mold requires CMake and a compiler supporting C++23 to compile. The
+easiest way to use Mold is with Git submodules and a CMake project.
+
+1. Clone the repository as a submodule
+
+   #+BEGIN_SRC sh
+     git submodule add https://github.com/Pancakey8/mold.git mold
+   #+END_SRC
+
+2. Add Mold to ~CMakeLists.txt~
+
+   #+BEGIN_SRC cmake
+     # Include the directory
+     add_subdirectory(mold)
+
+     # Link Mold to target `foo`
+     target_link_libraries(foo PRIVATE mold)
+   #+END_SRC
+
+3. Include Mold and use, minimal example below:
+
+   #+BEGIN_SRC c++
+     #include <print>
+     #include <mold/script.hpp>
+
+     int main() {
+       std::string_view input {
+         "in x : Int\n"
+         "def foo := x + 1\n"
+       };
+
+       auto script = mold::Script::of_string(input);
+
+       if (!script.has_value()) {
+         for (auto &diag : script.error()) {
+           std::println("{}", diag.format(input));
+         }
+
+         return 1;
+       }
+
+       script->feed("x", {10});
+       if (auto res = script->tick(); !res.has_value()) {
+         std::println(stderr, "{}", res.error());
+         return 1;
+       }
+
+       std::println("{}", script->read("foo"));
+       return 0;
+     }
+   #+END_SRC

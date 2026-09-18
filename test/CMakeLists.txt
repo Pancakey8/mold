@@ -10,6 +10,7 @@ set(TEST_SOURCES
   name_res.cpp
   null_compat.cpp
   annotations.cpp
+  doc-30-example-1.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

@@ -1,0 +1,138 @@
+* Type system
+
+Mold is strongly typed, but types are generally inferred in most
+contexts.
+
+The basic list of types are:
+ - Int
+ - Real
+ - Bool
+ - String
+ - Event
+ - Date
+ - Time
+
+** Nullability
+
+Each type may be further annotated with a ~?~, e.g. ~Int?~ or
+~String?~. The ~?~ extends the type to permit =null= as a value.
+
+[[file:30-execution-model.org::#null_arith][Operational rules for null]] at runtime were detailed before. The typing
+rules mirror the same semantics,
+
+- Most operations propagate nullability directly
+
+  #+BEGIN_SRC text
+    (x : Date?) + (y : Time) = (r : Date?)
+    (p : Bool) && (q : Bool?) = (r : Bool?)
+  #+END_SRC
+
+- Equals, not equals, and comparisons produce a direct ~Bool~
+
+  #+BEGIN_SRC text
+    ((a : Int?) = (b : Int)) = (c : Bool)
+    ((x : Real) <= (y : Real?)) = (z : Bool)
+  #+END_SRC
+
+- Null coalescing uses the nullability of the right-hand side.
+
+  #+BEGIN_SRC text
+    (a : Int?) ? (b : Int) = (c : Int)
+    (k : Event?) ? (m : Event?) = (n : Event?)
+  #+END_SRC
+
+** Coercions
+
+The only implicit coercion is from ~Int~ to ~Real~. For example, ~3 + 5.0~
+has type ~Real~, upcasting ~3~ to ~3.0~. 
+
+Sometimes, coercion causes ambiguity in type inferrence:
+
+#+BEGIN_SRC text
+  in y : Int
+  def x := pre(x) ? 0 + y
+#+END_SRC
+
+Here, ~x : Int~ and ~x : Real~ are both valid choices. In this case,
+Mold chooses to avoid coercions, choosing ~x : Int~.
+
+** Assignability
+
+When two types are referring to values, it's possible to upcast and
+decide nullability symmetrically. This is the behaviour for
+expressions. However, in function calls and in variable definitions,
+the type signature of a parameter or variable is fixed. In such cases,
+assignability is considered:
+ - ~T~ can be assigned to ~T~ or ~T?~
+ - ~T?~ can only be assigned to ~T?~
+ - ~Int~ can be assigned to ~Real~ with a coercion.
+
+The assignability rules match the rules described in the document
+prior, though they are unidirectional.
+
+** Type annotations & Underconstrainedness
+
+Sometimes, overloaded operators cause type ambiguity, making
+inferrence impossible. For example:
+
+#+BEGIN_SRC text
+  def x := pre(a) + pre(b)
+  def a := pre(x)
+  def b := pre(x)
+#+END_SRC
+
+For the snippet above, the only inferrence is that ~x~, ~a~ and ~b~
+share the same type, and that they're all nullable. However, the
+concrete types could be one of four cases:
+ - all three ~Int?~
+ - all three ~Real?~
+ - all three ~String?~
+ - all three ~Time?~
+
+In this case, annotating one of the three is necessary to describe
+intention. For example, ~def x : String? := pre(a) + pre(b)~ is enough
+to resolve the underconstrained error.
+
+However, such cases of ambiguity are rare, since semantically the
+program above defines ~x = null~, ~a = null~ and ~b = null~, and the
+type we choose only determines the type of ~null~ which fits into any
+~T?~.
+
+** Function name qualification
+
+Mold doesn't support a standard overloading system for
+functions. Instead, name qualification is used. For a function call
+~f(x, ...)~, if the function ~f~ isn't found in scope, then the type
+of the first parameter ~x~ is checked. If ~x~ has a known type ~T~,
+then the function ~T.f(x, ...)~ is called, if it exists. To
+demonstrate,
+
+#+BEGIN_SRC text
+  max(2, 3) # Calls `Int.max(2, 3)`
+  max(3.0, 5) # Call `Real.max(3.0, 5)`, upcasts `5`
+#+END_SRC
+
+whereas if ~max~ were defined in scope,
+
+#+BEGIN_SRC text
+  extern pure max(n : Int, m : Int) : Int
+  max(2, 3) # Call `max`
+  max(2.5, 3) # Call `max` and fail, doesn't try `Real.max`
+#+END_SRC
+
+For optionals, the base name is used, omitting ~?~.
+
+#+BEGIN_SRC text
+  in x : Int
+  def y := max(pre(x), 1) # Calls Int.max(pre(x), 1)
+#+END_SRC
+
+Since the argument type must resolve before the call, the following
+fails:
+
+#+BEGIN_SRC text
+  def x := max(pre(x), 1)
+#+END_SRC
+
+In such cases, either ~Int.max~ must be called explicitly, or the type
+must be annotated beforehand as ~def x : Int? := max(pre(x), 1)~.
