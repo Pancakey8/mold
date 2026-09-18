@@ -1,0 +1,761 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2026-09-18 Fri 17:28 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding Mold Runtime</title>
+<meta name="author" content="Pancake" />
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+</head>
+<body>
+<div id="preamble" class="status">
+<a href="./00-home.html">Back to home</a>
+</div>
+<div id="content" class="content">
+<h1 class="title">Understanding Mold Runtime</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#org54c488d">1. Dependency Graph</a></li>
+<li><a href="#ticks">2. Ticks</a></li>
+<li><a href="#orgbdb9ef2">3. Shifting the sequences</a></li>
+<li><a href="#null_arith">4. Null arithmetic</a></li>
+<li><a href="#org37e8f6b">5. Signals and events</a></li>
+<li><a href="#orgff12fc7">6. Purity and externs</a></li>
+</ul>
+</div>
+</div>
+<p>
+Mold doesn't follow a traditional top-to-bottom execution
+model. Instead, the runtime evaluates only necessary formulae by
+following the dependency relations. Execution happens only on discrete
+steps called ticks.
+</p>
+<div id="outline-container-org54c488d" class="outline-2">
+<h2 id="org54c488d"><span class="section-number-2">1.</span> Dependency Graph</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+Mold represents dependencies as a directed graph. Each edge on the
+graph represents a "providing" relation. Example:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">in x : Int
+in y : Int
+def foo := x * x
+def bar := foo + y
+</pre>
+</div>
+
+
+<div id="orgd814f53" class="figure">
+<p><img src="../img/doc-30-graph-1.png" alt="doc-30-graph-1.png" />
+</p>
+</div>
+
+<p>
+Dependencies guide evaluation. When the host feeds a new value for
+<code>x</code>, the graph suggests that <code>foo</code> must be evaluated. To illustrate,
+if <code>x = 2</code> initially, then <code>foo = 4</code>. If the host then feeds <code>x = 3</code>,
+then <code>foo</code> must update to <code>9</code>. This propagates further to <code>bar</code>, which
+has to update from <code>4 + y</code> to <code>9 + y</code>.
+</p>
+
+<p>
+However, each node can also decide on a cutoff. For example, if the
+host were to feed <code>x = -2</code> instead of <code>x = 3</code> as in the last example,
+then <code>foo</code> evaluates to <code>4</code> again. After this evaluation, <code>foo</code> no
+longer propagates, and <code>bar</code> doesn't evaluate again, assuming <code>y</code>
+remains the same.
+</p>
+
+<p>
+Due to the way the propagation works, if there were a cycle such as,
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">def x := y + 1
+def y := x + 1
+</pre>
+</div>
+
+<p>
+then computation would not terminate. In general, since cycles can
+diverge they are rejected with the exception of <code>pre()</code> (explained
+later).
+</p>
+</div>
+</div>
+<div id="outline-container-ticks" class="outline-2">
+<h2 id="ticks"><span class="section-number-2">2.</span> Ticks</h2>
+<div class="outline-text-2" id="text-ticks">
+<p>
+When the host calls <code>feed()</code> and similar method on the <code>Script</code>
+object, it only marks a change, but it doesn't commit to it, and it
+doesn't evaluate. Ticks are the discrete steps, triggered by the
+<code>tick()</code> method, where evaluation occurs and where changes are
+committed.
+</p>
+
+<p>
+The clearest mental model for ticks is to treat each formula as a
+sequence. The tick provides the maximum range of the indices. For
+example:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">in y : Int
+def x := y * 2
+</pre>
+</div>
+
+<p>
+has a sequence evolving at each tick as below
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-right">Tick</th>
+<th scope="col" class="org-right">Value fed to y</th>
+<th scope="col" class="org-left">y</th>
+<th scope="col" class="org-left">x</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-right">0</td>
+<td class="org-right">5</td>
+<td class="org-left">y = (5)</td>
+<td class="org-left">x = (10)</td>
+</tr>
+
+<tr>
+<td class="org-right">1</td>
+<td class="org-right">3</td>
+<td class="org-left">y = (5, 3)</td>
+<td class="org-left">x = (10, 6)</td>
+</tr>
+
+<tr>
+<td class="org-right">2</td>
+<td class="org-right">6</td>
+<td class="org-left">y = (5, 3, 6)</td>
+<td class="org-left">x = (10, 6, 12)</td>
+</tr>
+
+<tr>
+<td class="org-right">3</td>
+<td class="org-right">11</td>
+<td class="org-left">y = (5, 3, 6, 11)</td>
+<td class="org-left">x = (10, 6, 12, 22)</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+In this model, each operation acts on sequences. For example, <code>2</code>
+defines a constant sequence of twos, and <code>*</code> multiplies corresponding
+values of two sequences.
+</p>
+</div>
+</div>
+<div id="outline-container-orgbdb9ef2" class="outline-2">
+<h2 id="orgbdb9ef2"><span class="section-number-2">3.</span> Shifting the sequences</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+The <code>pre()</code> function reads old values of a top-level variable, such as
+inputs and formulae. By default, it reads the last value, but
+optionally a depth can be specified as a second argument to read the
+last Nth value. Since ticks progress in steps, this value doesn't
+always exist on the initial few ticks. In these cases, <code>pre</code> evaluates
+to <code>null</code>.
+</p>
+
+<p>
+Since <code>pre</code> is a lookup to old values, it doesn't change in a given
+tick. As such, it doesn't cause a propagation loop, and is omitted
+from dependencies. As a result, cycles such as the one below are
+allowed, and these cycles progress over ticks.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">in a : Int
+in b : Int
+def x := pre(y) ? 0 + a
+def y := pre(x) ? 0 + b
+</pre>
+</div>
+
+<p>
+It should be noted that, since <code>pre</code> don't count toward dependencies,
+these cycles don't progress on their own, and require triggering
+dependencies (such as <code>a</code> or <code>b</code>) to iterate, as with other formulae.
+</p>
+
+<p>
+Using the sequence model defined in the <a href="#ticks">Ticks</a> section, <code>pre</code> may be
+treated as a right-shift on the sequence of a variable. Values that
+shift past the current tick bounds are dropped, whereas values that
+remain empty after the shift are filled with <code>null</code>.
+</p>
+
+<p>
+For instance, using the table from the previous example, <code>pre(x)</code> and
+<code>pre(x, 2)</code> operate as below:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">x</th>
+<th scope="col" class="org-left"><code>pre(x)</code></th>
+<th scope="col" class="org-left"><code>pre(x, 2)</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">x = (10)</td>
+<td class="org-left">x = (null)</td>
+<td class="org-left">x = (null)</td>
+</tr>
+
+<tr>
+<td class="org-left">x = (10, 6)</td>
+<td class="org-left">x = (null, 10)</td>
+<td class="org-left">x = (null, null)</td>
+</tr>
+
+<tr>
+<td class="org-left">x = (10, 6, 12)</td>
+<td class="org-left">x = (null, 10, 6)</td>
+<td class="org-left">x = (null, null, 10)</td>
+</tr>
+
+<tr>
+<td class="org-left">x = (10, 6, 12, 22)</td>
+<td class="org-left">x = (null, 10, 6, 12)</td>
+<td class="org-left">x = (null, null, 10, 6)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="outline-container-null_arith" class="outline-2">
+<h2 id="null_arith"><span class="section-number-2">4.</span> Null arithmetic</h2>
+<div class="outline-text-2" id="text-null_arith">
+<p>
+Since operations act on entire sequences, <code>null</code> has well-defined
+semantics in standard operations to allow for better interactions when
+using <code>pre</code>.
+</p>
+
+<p>
+Most operations directly propagate <code>null</code>,
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">2 + null = null
+null / 6 = null
+5 &gt;&gt; null = null
+</pre>
+</div>
+
+<p>
+For those coming from scripting languages, <code>null</code> interaction with
+boolean operations may be unexpected. The standard <code>value || default</code>
+pattern fails since boolean operations also directly propagate null:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">true &amp;&amp; null = null
+null || true = null # &lt;- Most languages take this as true
+</pre>
+</div>
+
+<p>
+The defaulting pattern for Mold is instead the coalescing operator, <code>?</code>.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">null ? 3 = 3
+</pre>
+</div>
+
+<p>
+Equals (<code>=</code>) and not equals (<code>/=</code>) are also operators that consume
+<code>null</code>, producing only a direct boolean.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">x = x # true
+x = null # false
+null = null # true
+
+x /= x # false
+x /= null # true
+null /= null # false
+</pre>
+</div>
+
+<p>
+Inequality similarly operates with null, producing just a boolean. In
+inequalities, <code>null</code> is defined as the smallest value, meaning <code>x &gt; null</code>,
+<code>x &gt;= null</code> and <code>null &lt;= x</code> always hold. For <code>x &lt; null</code>, it is
+generally true, but since <code>null &lt; null</code> is false (they are equal) it
+doesn't generalise unlike the other cases.
+</p>
+
+<p>
+For if/else expressions, <code>null</code> is treated the same as false,
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">if pre(x) /= null &amp;&amp; pre(x) then 3 else 5
+# same as:
+if pre(x) then 3 else 5
+
+if true then 3 else 5 # 3
+if false then 3 else 5 # 5
+if null then 3 else 5 # 5
+</pre>
+</div>
+
+<p>
+The null arithmetic allows for patterns such as:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">def x := max(pre(x), y)
+</pre>
+</div>
+
+<p>
+where, at tick zero, <code>pre(x)</code> is <code>null</code> and <code>max(null, y)</code> naturally
+resolves to <code>y</code> since <code>null</code> is always smaller. Alternative patterns
+have to use defaults such as a minimum integer constant or cleverly
+default <code>pre(x)</code> to <code>y</code>, though such handling is error-prone.
+</p>
+</div>
+</div>
+<div id="outline-container-org37e8f6b" class="outline-2">
+<h2 id="org37e8f6b"><span class="section-number-2">5.</span> Signals and events</h2>
+<div class="outline-text-2" id="text-5">
+<p>
+An event in Mold is simply a value, and carries no special properties.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">out sprinklers(level : Int)
+sprinklers(3) # Just a value of type `Event`
+</pre>
+</div>
+
+<p>
+The dispatch mechanism of events lie in signals. A signal is a formula
+that registers its value for dispatch if it changed after
+evaluation. The dispatching may be thought of as a dependency that a
+signal provides. For example,
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">out alert(msg : String)
+out log(msg : String, temp : Int)
+# Temperature (&#8451;)
+in temp : Int
+
+signal overheating :=
+  if temp &gt; 70
+    then if temp - pre(temp) &gt; 5
+      then alert("Overheating fast")
+      else alert("High temperature")
+    else log("Chill temperature", temp)
+</pre>
+</div>
+
+<p>
+with a host
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c++"><span class="org-src-type">int</span> <span class="org-src-function-name">main</span>() {
+  <span class="org-src-constant">std</span>::<span class="org-src-type">vector</span>&lt;<span class="org-src-constant">std</span>::int64_t&gt; <span class="org-src-variable-name">temps</span>{65, 66, 65, 65, 71, 77, 78, 79};
+
+  <span class="org-src-keyword">auto</span> <span class="org-src-variable-name">script</span> = <span class="org-src-comment-delimiter">/* </span><span class="org-src-comment">...</span><span class="org-src-comment-delimiter">  */</span>;
+
+  script.on(<span class="org-src-string">"alert"</span>, [](<span class="org-src-keyword">auto</span> <span class="org-src-variable-name">args</span>) {
+    <span class="org-src-constant">std</span>::println(<span class="org-src-string">"[SEVERE] {}"</span>, args[0]);
+  });
+
+  script.on(<span class="org-src-string">"log"</span>, [](<span class="org-src-keyword">auto</span> <span class="org-src-variable-name">args</span>) {
+    <span class="org-src-constant">std</span>::println(<span class="org-src-string">"[INFO] {} -- {}&#8451;"</span>, args[0], args[1]);
+  });
+
+  <span class="org-src-keyword">for</span> (<span class="org-src-keyword">auto</span> <span class="org-src-variable-name">temp</span> : temps) {
+    script.feed(<span class="org-src-string">"temp"</span>, {temp});
+    <span class="org-src-keyword">if</span> (<span class="org-src-keyword">auto</span> <span class="org-src-variable-name">res</span> = script.tick(); <span class="org-src-negation-char">!</span>res.has_value()) {
+      <span class="org-src-constant">std</span>::println(<span class="org-src-string">"{}"</span>, res.error());
+      assert(<span class="org-src-constant">false</span> &amp;&amp; <span class="org-src-string">"Interpreter crash"</span>);
+    }
+  }
+}
+</pre>
+</div>
+
+<p>
+is expected to output
+</p>
+
+<div class="org-src-container">
+<pre class="src src-text">[INFO] Chill temperature -- 65&#8451;
+[INFO] Chill temperature -- 66&#8451;
+[INFO] Chill temperature -- 65&#8451;
+[SEVERE] Overheating fast
+[SEVERE] High temperature
+</pre>
+</div>
+
+<p>
+It is important to emphasise that the dispatch only occurs on
+change. From tick two to tick three, <code>temp</code> remains <code>65</code>. Only the
+first of these ticks emits the info. As opposed to this, from tick
+zero to tick one, and from tick one to tick two, the <code>temp</code>
+fluctuates, each of the three ticks thus emits an event.
+</p>
+
+<p>
+In the sequence model, the signal may be modelled with a deduplicating
+function. The formula of the signal produces a value each tick, but
+deduplication filters through the sequence and keeps only the first of
+any run of the same values, replacing others with <code>null</code>.
+</p>
+
+<p>
+To illustrate, the original sequence of <code>overheating</code> and the
+deduplicated version are given below:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-right">Tick</th>
+<th scope="col" class="org-left">Original</th>
+<th scope="col" class="org-left">Deduplicated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-right">0</td>
+<td class="org-left">log("Chill temperature", 65)</td>
+<td class="org-left">log("Chill temperature", 65)</td>
+</tr>
+
+<tr>
+<td class="org-right">1</td>
+<td class="org-left">log("Chill temperature", 66)</td>
+<td class="org-left">log("Chill temperature", 66)</td>
+</tr>
+
+<tr>
+<td class="org-right">2</td>
+<td class="org-left">log("Chill temperature", 65)</td>
+<td class="org-left">log("Chill temperature", 65)</td>
+</tr>
+
+<tr>
+<td class="org-right">3</td>
+<td class="org-left">log("Chill temperature", 65)</td>
+<td class="org-left">null</td>
+</tr>
+
+<tr>
+<td class="org-right">4</td>
+<td class="org-left">alert("Overheating fast")</td>
+<td class="org-left">alert("Overheating fast")</td>
+</tr>
+
+<tr>
+<td class="org-right">5</td>
+<td class="org-left">alert("Overheating fast")</td>
+<td class="org-left">null</td>
+</tr>
+
+<tr>
+<td class="org-right">6</td>
+<td class="org-left">alert("High temperature")</td>
+<td class="org-left">alert("High temperature")</td>
+</tr>
+
+<tr>
+<td class="org-right">7</td>
+<td class="org-left">alert("High temperature")</td>
+<td class="org-left">null</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="outline-container-orgff12fc7" class="outline-2">
+<h2 id="orgff12fc7"><span class="section-number-2">6.</span> Purity and externs</h2>
+<div class="outline-text-2" id="text-6">
+<p>
+Externs are marked with one of <code>pure</code> or <code>impure</code>. In Mold, these
+keywords only refer to dependency relations. A <code>pure</code> function is
+evaluated only when any of its arguments change, whereas an <code>impure</code>
+function is evaluated each tick even if none of its arguments change.
+</p>
+
+<p>
+For example, traditionally, a print function may be impure because it
+has a side effect. In Mold, printing functions are instead often
+treated as <code>pure</code>, since printing an evaluated formula is a more
+predictable behaviour than evaluating a formula only to run print. As
+opposed to this, the <code>Date.now()</code> function is treated as impure since
+its output changes even though it appears as a constant
+dependency-wise (no arguments), and the the value being up-to-date is
+semantically critical.
+</p>
+
+<p>
+The choice of one over the other is not something enforced or checked
+by Mold. A function that queries a database might be pure (if it
+rarely updates, or if the call is expensive / should be cached) or
+impure (the data must be up-to-date, and each tick queries the
+database).
+</p>
+
+<p>
+In terms of dependencies, it is better to treat the concepts as
+separate. Pure functions are transformations, and a pure call <code>f(x)</code>
+is semantically similar to an operation like <code>x + 1</code>. In contrast, an
+impure call behaves more like an input that is called by the
+runtime. An impure call <code>f(x)</code> is almost equivalent to providing
+<code>f(x)</code> in an <code>in call_result : T</code> each tick.
+</p>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: Pancake</p>
+<p class="date">Created: 2026-09-18 Fri 17:28</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
