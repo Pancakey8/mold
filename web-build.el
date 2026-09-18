@@ -41,6 +41,13 @@
                             (insert-file-contents (expand-file-name "doc/preamble.html" my/project-root))
                             (buffer-string)))
          :recursive t
-         :publishing-function org-html-publish-to-html)))
+         :publishing-function org-html-publish-to-html)
+
+        ("html-pages"
+	     :base-directory "./doc/"
+	     :base-extension "css\\|html"
+	     :publishing-directory "./web-doc/"
+	     :recursive t
+	     :publishing-function org-publish-attachment)))
 
 (org-publish-all t)
