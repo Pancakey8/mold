@@ -1,4 +1,4 @@
-* Language Tour
+#+TITLE: Language Tour
 
 This page serves as a quick overview of syntax and simple features,
 it's not a comprehensive list. See [[file:60-cheatsheet.org][Cheatsheet]] for a more comprehensive

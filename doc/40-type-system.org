@@ -1,4 +1,4 @@
-* Type system
+#+TITLE: Type system
 
 Mold is strongly typed, but types are generally inferred in most
 contexts.

@@ -1,3 +1,5 @@
-* TODO Cheatsheet
+#+TITLE: Cheatsheet
 
 Full cheatsheet will go here.
+
+* TODO

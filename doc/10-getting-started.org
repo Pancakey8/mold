@@ -1,4 +1,4 @@
-* Getting Started
+#+TITLE: Getting Started
 
 Mold requires CMake and a compiler supporting C++23 to compile. The
 easiest way to use Mold is with Git submodules and a CMake project.

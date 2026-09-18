@@ -1,4 +1,4 @@
-* Builtins
+#+TITLE: Builtins
 
 #+NAME: process-table
 #+BEGIN_SRC emacs-lisp :var data="" :results value table :exports none

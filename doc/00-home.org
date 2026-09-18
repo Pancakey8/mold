@@ -1,0 +1,33 @@
+#+TITLE: Mold Documentation Homepage
+
+These pages describe the behaviour and features of Mold and its C++
+library.
+
+** Page list
+
+#+BEGIN_SRC emacs-lisp :var dir="." :exports results :results value table
+  (cons '("Page")
+        (cons 'hline
+              (mapcar
+               (lambda (file)
+                 (with-temp-buffer
+                   (insert-file-contents file)
+                   (org-mode)
+                   (let ((title (cdr (assoc "TITLE" (org-collect-keywords '("TITLE"))))))
+                     (list
+                      (format "[[file:%s][%s]]"
+                              (file-name-nondirectory file)
+                              (or (car title) ""))))))
+               (directory-files dir t "\\.org\\'"))))
+#+END_SRC
+
+#+RESULTS:
+| Page                        |
+|-----------------------------|
+| [[file:00-home.org][Mold Documentation Homepage]] |
+| [[file:10-getting-started.org][Getting Started]]             |
+| [[file:20-syntax-and-tour.org][Language Tour]]               |
+| [[file:30-execution-model.org][Understanding Mold Runtime]]  |
+| [[file:40-type-system.org][Type system]]                 |
+| [[file:50-builtins.org][Builtins]]                    |
+| [[file:60-cheatsheet.org][Cheatsheet]]                  |

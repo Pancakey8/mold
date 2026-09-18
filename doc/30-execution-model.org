@@ -1,4 +1,4 @@
-* Understanding Mold Runtime
+#+TITLE: Understanding Mold Runtime
 
 Mold doesn't follow a traditional top-to-bottom execution
 model. Instead, the runtime evaluates only necessary formulae by
