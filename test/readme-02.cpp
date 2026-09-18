@@ -25,7 +25,7 @@ int main() {
   script.on("alert", [&alerted, &tick](auto args) {
     auto current = std::get<double>(args[0].data);
     auto when = std::get<mold::Date>(args[1].data);
-    std::println("(!) {}℃", current, when);
+    std::println("(!) {}℃ -- {}", current, when);
     alerted[tick] = true;
   });
 

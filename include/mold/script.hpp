@@ -42,6 +42,8 @@ struct Source {
 struct Diagnostic {
   std::string_view message;
   Source src;
+
+  std::string format(std::string_view input);
 };
 
 class Script {

@@ -83,8 +83,9 @@ Mold only has a few top-level components,
    receive any parameters.
  - ~signal~ are formulae that evaluate to specified event
    objects. Events are only dispatched if a signal holds them by the
-   end of the tick. The same event is dispatched only once in a row,
-   that is, dispatching requires the signal value to change.
+   end of the tick. An unchanged signal is not dispatched again, so an
+   event held by a signal is emitted only when the signal's value
+   changes.
  - ~extern~ represent native functions provided by the host. They are
    further specified as ~pure~ and ~impure~. This only signals a
    dependency relation. If a function (such as ~current_time()~) can
@@ -101,13 +102,14 @@ Mold also has a fixed set of types:
  - Date
  - Time
 
-Additionally, each type can be nullable (denoted ~T?~, e.g. ~Int?~)
-meaning the type is extended to permit =null=. The =null= value
-propagates across operations in various ways,
- - Most standard operations propagate directly, ~2 + null = null~.
- - Coalescing operator can consume =null=, ~null ? 3 = 3~.
- - =null= is the smallest value of any type, ~null < x~, and it equals
-   itself ~null = null~.
+Additionally, each type can be nullable (denoted ~T?~, e.g. ~Int?~),
+which permits =null= value. Most operations propagate =null=, and the
+coalescing operator can provide a fallback:
+
+#+BEGIN_SRC text
+  2 + null = null
+  null ? 3 = null
+#+END_SRC
 
 A complete example with the language may look as below,
 
@@ -151,7 +153,7 @@ Given a host such as,
   script.on("alert", [](auto args) {
     auto current = std::get<double>(args[0].data);
     auto when = std::get<mold::Date>(args[1].data);
-    std::println("(!) {}℃", current, when);
+    std::println("(!) {}℃ -- {}", current, when);
   });
 
   script.on("toggle_ac", [](auto args) {
@@ -183,21 +185,21 @@ Given a host such as,
   }
 #+END_SRC
 
-the expected output is
+An expected output might be:
 
 #+BEGIN_SRC text
-Closed AC
-Temp = 15.1
-Temp = 15.3
-Temp = 15.6
-(!) 21.1℃
-Opened AC
-Temp = 21.1
-(!) 26.3℃
-Temp = 26.3
-(!) 32.2℃
-Temp = 32.2
-Closed AC
-Temp = 25.5
+  Closed AC
+  Temp = 15.1
+  Temp = 15.3
+  Temp = 15.6
+  (!) 21.1℃ -- 2026-09-18 05:51:04.111135633
+  Opened AC
+  Temp = 21.1
+  (!) 26.3℃ -- 2026-09-18 05:51:04.211540186
+  Temp = 26.3
+  (!) 32.2℃ -- 2026-09-18 05:51:04.311828508
+  Temp = 32.2
+  Closed AC
+  Temp = 25.5
 #+END_SRC
 
