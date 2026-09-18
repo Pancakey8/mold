@@ -99,8 +99,9 @@ std::string Node::show(const NodePool &pool) const {
                                node_str(n.right, pool));
           },
           [&](const LetIn &n) {
-            return std::format("name={}, init={}, body={}", n.name,
-                               node_str(n.init, pool), node_str(n.body, pool));
+            return std::format("name={}, init={}, type={}, body={}", n.name,
+                               node_str(n.init, pool), node_str(n.type, pool),
+                               node_str(n.body, pool));
           },
           [&](const IfElse &n) {
             return std::format("cond={}, tru={}, fals={}",
@@ -126,8 +127,8 @@ std::string Node::show(const NodePool &pool) const {
                                map_str(n.params, pool));
           },
           [&](const Formula &n) {
-            return std::format("name={}, init={}", n.name,
-                               node_str(n.init, pool));
+            return std::format("name={}, type={}, init={}", n.name,
+                               node_str(n.type, pool), node_str(n.init, pool));
           },
           [&](const Signal &n) {
             return std::format("name={}, init={}", n.name,

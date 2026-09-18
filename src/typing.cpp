@@ -215,10 +215,25 @@ NodeId Typing::infer(NodeId id) {
           },
           [&](const LetIn &n) -> NodeId {
             auto init = infer(n.init);
-            locals.push_back({n.name, inferred[init.id]});
+            auto ty_init = inferred[init.id];
+
+            NodeId type = NODEID_NONE;
+            InternType let_type = ty_init;
+
+            if (n.type != NODEID_NONE) {
+              type = infer(n.type);
+              let_type = inferred[type.id];
+
+              if (!assignable(init, ty_init, let_type)) {
+                diags.emplace_back("Initializer type doesn't fit declared type",
+                                   ast[n.init].source);
+              }
+            }
+
+            locals.push_back({n.name, let_type});
             auto body = infer(n.body);
             locals.pop_back();
-            return push_node(LetIn{n.name, init, body}, ast[id].source,
+            return push_node(LetIn{n.name, type, init, body}, ast[id].source,
                              inferred[body.id]);
           },
           [&](const IfElse &n) -> NodeId {
@@ -397,20 +412,54 @@ NodeId Typing::infer(NodeId id) {
             return push_node(Input{n.name, sig}, ast[id].source, ty_sig);
           },
           [&](const Formula &n) -> NodeId {
-            auto init = infer(n.init);
-            auto ty_init = inferred[init.id];
-            if (globals.contains(n.name)) {
-              if (!unify(globals[n.name], ty_init)) {
+            NodeId type = NODEID_NONE;
+            InternType formula_type{};
+
+            if (n.type != NODEID_NONE) {
+              type = infer(n.type);
+              formula_type = inferred[type.id];
+
+              if (globals.contains(n.name) &&
+                  !unify(globals[n.name], formula_type)) {
                 diags.emplace_back(
                     "Type failed to unify with previous assumption",
                     ast[id].source);
                 globals[n.name] = InternType::concrete(MoldType::FAIL);
-                return push_node(Formula{n.name, init}, ast[id].source,
+                return push_node(Formula{n.name, type, NODEID_NONE},
+                                 ast[id].source,
                                  InternType::concrete(MoldType::FAIL));
               }
+
+              globals[n.name] = formula_type;
             }
-            globals[n.name] = ty_init;
-            return push_node(Formula{n.name, init}, ast[id].source, ty_init);
+
+            auto init = infer(n.init);
+            auto ty_init = inferred[init.id];
+
+            if (n.type == NODEID_NONE) {
+              if (globals.contains(n.name)) {
+                if (!unify(globals[n.name], ty_init)) {
+                  diags.emplace_back(
+                      "Type failed to unify with previous assumption",
+                      ast[id].source);
+                  globals[n.name] = InternType::concrete(MoldType::FAIL);
+                  return push_node(Formula{n.name, type, init},
+                                   ast[id].source,
+                                   InternType::concrete(MoldType::FAIL));
+                }
+              }
+              formula_type = ty_init;
+              globals[n.name] = formula_type;
+            } else if (!assignable(init, ty_init, formula_type)) {
+              diags.emplace_back("Initializer type doesn't fit declared type",
+                                 ast[n.init].source);
+              globals[n.name] = InternType::concrete(MoldType::FAIL);
+              return push_node(Formula{n.name, type, init}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
+            }
+
+            return push_node(Formula{n.name, type, init}, ast[id].source,
+                             formula_type);
           },
           [&](const Signal &n) -> NodeId {
             auto init = infer(n.init);
@@ -821,8 +870,9 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
                                node_str(n.right, pool));
           },
           [&](const LetIn &n) {
-            return std::format("name={}, init={}, body={}", n.name,
-                               node_str(n.init, pool), node_str(n.body, pool));
+            return std::format("name={}, init={}, type={}, body={}", n.name,
+                               node_str(n.init, pool), node_str(n.type, pool),
+                               node_str(n.body, pool));
           },
           [&](const IfElse &n) {
             return std::format("cond={}, tru={}, fals={}",
@@ -848,8 +898,8 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
                                map_str(n.params, pool));
           },
           [&](const Formula &n) {
-            return std::format("name={}, init={}", n.name,
-                               node_str(n.init, pool));
+            return std::format("name={}, type={}, init={}", n.name,
+                               node_str(n.type, pool), node_str(n.init, pool));
           },
           [&](const Signal &n) {
             return std::format("name={}, init={}", n.name,

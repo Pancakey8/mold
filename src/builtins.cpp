@@ -23,12 +23,26 @@ InternValue builtin_date_now(std::int16_t, InternValue *) {
 }
 
 InternValue builtin_int_max(std::int16_t, InternValue *argv) {
+  if (argv[0].tag == InternValue::NIL) {
+    argv[1].inc();
+    return argv[1];
+  } else if (argv[1].tag == InternValue::NIL) {
+    argv[0].inc();
+    return argv[0];    
+  }
   auto l = argv[0].data.i;
   auto r = argv[1].data.i;
   return {{.i = std::max(l, r)}, InternValue::INT};
 }
 
 InternValue builtin_real_max(std::int16_t, InternValue *argv) {
+  if (argv[0].tag == InternValue::NIL) {
+    argv[1].inc();
+    return argv[1];
+  } else if (argv[1].tag == InternValue::NIL) {
+    argv[0].inc();
+    return argv[0];    
+  }
   auto l = argv[0].data.r;
   auto r = argv[1].data.r;
   return {{.r = std::max(l, r)}, InternValue::REAL};
@@ -37,14 +51,14 @@ InternValue builtin_real_max(std::int16_t, InternValue *argv) {
 // clang-format off
 static std::vector<Builtin> BUILTINS {
   {"Int.max",
-   {{MoldType::INT, false}, {MoldType::INT, false}},
-   {MoldType::INT, false},
+   {{MoldType::INT, true}, {MoldType::INT, true}},
+   {MoldType::INT, true},
    true,
    builtin_int_max},
 
   {"Real.max",
-   {{MoldType::REAL, false}, {MoldType::REAL, false}},
-   {MoldType::REAL, false},
+   {{MoldType::REAL, true}, {MoldType::REAL, true}},
+   {MoldType::REAL, true},
    true,
    builtin_real_max},
 

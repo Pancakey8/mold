@@ -79,7 +79,8 @@ struct BinaryOp {
 
 struct LetIn {
   std::string_view name;
-  NodeId init, body;
+  NodeId type, init;
+  NodeId body;
 };
 
 struct IfElse {
@@ -113,6 +114,7 @@ struct Output {
 
 struct Formula {
   std::string_view name;
+  NodeId type;
   NodeId init;
 };
 

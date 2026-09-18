@@ -9,6 +9,7 @@ set(TEST_SOURCES
   purity.cpp
   name_res.cpp
   null_compat.cpp
+  annotations.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

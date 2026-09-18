@@ -39,6 +39,13 @@ NodeId Parser::parse_atom() {
     auto name = lexer.get()->data.ident;
     lexer.next();
 
+    NodeId type{NODEID_NONE};
+
+    if (lexer.get() && lexer.get()->kind == Token::COLON) {
+      lexer.next();
+      type = parse_type();
+    }
+
     expect(DEF_EQ);
     lexer.next();
 
@@ -50,7 +57,7 @@ NodeId Parser::parse_atom() {
     auto body = parse_expr();
 
     return pool.push(
-        {LetIn{name, init, body}, start->source + pool[body].source});
+                     {LetIn{name, type, init, body}, start->source + pool[body].source});
   }
   case Token::KW_IF: {
     lexer.next();
@@ -363,12 +370,18 @@ NodeId Parser::parse_tl() {
     auto name = lexer.get()->data.ident;
     lexer.next();
 
+    NodeId type{NODEID_NONE};
+    if (lexer.get() && lexer.get()->kind == Token::COLON) {
+      lexer.next();
+      type = parse_type();
+    }
+
     expect(DEF_EQ);
     lexer.next();
 
     NodeId init = parse_expr();
 
-    return pool.push({Formula{name, init}, start->source + pool[init].source});
+    return pool.push({Formula{name, type, init}, start->source + pool[init].source});
   }
   case Token::KW_SIGNAL: {
     lexer.next();

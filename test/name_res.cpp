@@ -18,6 +18,7 @@ int main() {
     "def qux := g(3.0, x)\n"
     "def always := acc(x)\n"
     "def builtin := max(x, 3)\n"
+    "def annot : Int? := g(pre(annot), 1)\n"
   };
   // clang-format on
 
@@ -52,4 +53,5 @@ int main() {
   assert(std::get<double>(script.read("qux").data) == -7.0);
   assert(std::get<std::int64_t>(script.read("always").data) == 20);
   assert(std::get<std::int64_t>(script.read("builtin").data) == 10);
+  assert(std::holds_alternative<std::monostate>(script.read("annot").data));
 }
