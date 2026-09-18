@@ -203,3 +203,5 @@ An expected output might be:
   Temp = 25.5
 #+END_SRC
 
+For a full documentation of the language, see the [[file:doc/00-home.org][doc/]]
+folder. Alternatively, visit [[https://pancakey8.github.io/mold/][the website]]
