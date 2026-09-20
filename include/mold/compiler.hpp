@@ -129,7 +129,7 @@ struct HInstr {
   using EventId = std::string_view;
   using VertId = std::string_view;
   using StructId = std::string_view;
-  using FieldId = std::uint16_t;
+  using FieldId = std::uint32_t;
 
   struct Const {
     ConstVal val;
@@ -242,7 +242,6 @@ struct HInstr {
   };
 
   struct Memb {
-    StructId str;
     FieldId field;
   };
 

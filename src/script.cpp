@@ -33,8 +33,9 @@ using StringMap = std::unordered_map<std::string, T, TransparentStringHash,
 
 struct Script::Impl {
   Program prog;
-  StringMap<std::uint32_t> vars, inputs, events, externs;
+  StringMap<std::uint32_t> vars, inputs, events, externs, structs;
   std::vector<std::string> event_names;
+  std::vector<std::string> struct_names;
   Interpreter interp;
 
   explicit Impl(Program p) : prog(std::move(p)), interp(prog) {}
@@ -105,6 +106,12 @@ Script::of_string(std::string_view input) {
   for (std::size_t id = 0; id < syms.exts.size(); ++id) {
     externs[std::string{syms.exts[id]}] = static_cast<std::uint32_t>(id);
   }
+  StringMap<std::uint32_t> structs{};
+  std::vector<std::string> struct_names{};
+  for (std::size_t id = 0; id < syms.structs.size(); ++id) {
+    structs[std::string{syms.structs[id]}] = static_cast<std::uint32_t>(id);
+    struct_names.push_back(std::string{syms.structs[id]});
+  }
   // std::println("{}\n{}", vars, inputs);
   auto impl = std::make_unique<Impl>(std::move(prog));
   impl->vars = std::move(vars);
@@ -112,6 +119,8 @@ Script::of_string(std::string_view input) {
   impl->events = std::move(events);
   impl->externs = std::move(externs);
   impl->event_names = std::move(event_names);
+  impl->structs = std::move(structs);
+  impl->struct_names = std::move(struct_names);
 
   return Script{std::move(impl)};
 }
@@ -153,6 +162,17 @@ InternValue Script::Impl::of_public(const Value &v) const {
           },
           [](Time t) -> InternValue {
             return {{.t = t.count()}, InternValue::TIME};
+          },
+          [this](Struct s) -> InternValue {
+            std::vector<InternValue> fields{};
+            fields.reserve(s.fields.size());
+            for (const auto &field : s.fields)
+              fields.push_back(of_public(field));
+            if (auto it = structs.find(s.kind); it != structs.end()) {
+              return InternValue::of_struct(it->second, fields);
+            } else {
+              return InternValue::of_struct(-1, fields);
+            }
           }},
       v.data);
 }
@@ -182,6 +202,14 @@ Value Script::Impl::of_intern(const InternValue &ival) const {
     return {Date{std::chrono::nanoseconds{ival.data.d}}};
   case internal::InternValue::TIME:
     return {Time{ival.data.t}};
+  case internal::InternValue::STRUCT:
+    std::vector<Value> fields{};
+    fields.reserve(ival.data.st->fieldc);
+    for (std::uint16_t i = 0; i < ival.data.st->fieldc; ++i) {
+      fields.push_back(of_intern(ival.data.st->fields[i]));
+    }
+    auto &name = struct_names[ival.data.st->tag];
+    return {Struct{name, std::move(fields)}};
   }
 }
 

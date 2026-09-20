@@ -84,7 +84,7 @@ void Compiler::compile(NodeId id) {
               auto n = std::distance(str->second.order.begin(), field);
 
               instrs.emplace_back(
-                  HInstr::Memb{str->first, static_cast<HInstr::FieldId>(n)});
+                  HInstr::Memb{static_cast<HInstr::FieldId>(n)});
             } else {
               compile(n.left);
               compile(n.right);
@@ -348,7 +348,7 @@ void HighToLow::lower(const HInstr &instr) {
             lo.emplace_back(Op::MKSTR, struct_at(i.str), i.initc);
           },
           [&](const HInstr::Memb &i) {
-            lo.emplace_back(Op::MEMB, struct_at(i.str), i.field);
+            lo.emplace_back(Op::MEMB, i.field);
           },
           [&](const HInstr::Comment &) {},
           [&](const HInstr::Term &) { lo.emplace_back(Op::TERM); },

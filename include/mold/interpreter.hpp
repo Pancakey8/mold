@@ -17,6 +17,8 @@ struct InternString {
 
 struct InternEvent;
 
+struct InternStruct;
+
 struct InternValue {
   union Data {
     std::int64_t i;
@@ -26,6 +28,7 @@ struct InternValue {
     InternEvent *e;
     std::int64_t d;
     std::int64_t t;
+    InternStruct *st;
   } data;
 
   enum Tag : std::uint8_t {
@@ -37,11 +40,14 @@ struct InternValue {
     EVENT,
     DATE,
     TIME,
+    STRUCT
   } tag;
 
   static InternValue of_string(std::string_view s);
   static InternValue of_event(std::uint32_t event_tag,
                               std::span<const InternValue> args);
+  static InternValue of_struct(std::uint32_t struct_tag,
+                               std::span<const InternValue> fields);
   const std::string_view as_string() const;
   void inc();
   void dec();
@@ -55,6 +61,13 @@ struct InternEvent {
   std::uint32_t tag;
   std::uint16_t argc;
   InternValue args[];
+};
+
+struct InternStruct {
+  std::uint32_t rc;
+  std::uint32_t tag;
+  std::uint16_t fieldc;
+  InternValue fields[];
 };
 
 struct IPQueue {

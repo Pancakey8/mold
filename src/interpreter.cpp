@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <print>
 #include <variant>
 
 namespace mold::internal {
@@ -601,10 +602,36 @@ void Interpreter::run() {
       ip++;
     } break;
     case Op::MKSTR: {
-      // TODO
+      std::uint16_t fieldc = instr.ext;
+      std::uint32_t struct_tag = instr.arg.u;
+      std::vector<InternValue> fields(fieldc);
+      for (int i = fieldc - 1; i >= 0; --i) {
+        fields[i] = stack.top();
+        stack.pop();
+      }
+      stack.push(InternValue::of_struct(struct_tag, fields));
+      ip++;
     } break;
     case Op::MEMB: {
-      // TODO
+      auto str = stack.top();
+      stack.pop();
+      if (str.tag != InternValue::STRUCT) {
+        has_error = true;
+        error = "Type error in member access";
+        str.dec();
+        goto exit;
+      }
+      if (instr.arg.u >= str.data.st->fieldc) {
+        has_error = true;
+        error = "Field doesn't exist in member access";
+        str.dec();
+        goto exit;
+      }
+      auto v = str.data.st->fields[instr.arg.u];
+      v.inc();
+      stack.push(v);
+      str.dec();
+      ip++;
     } break;
     }
   }
@@ -721,6 +748,9 @@ void InternValue::inc() {
   case EVENT:
     data.e->rc++;
     break;
+  case STRUCT:
+    data.st->rc++;
+    break;
   case NIL:
   case INT:
   case REAL:
@@ -742,6 +772,12 @@ void InternValue::dec() {
   case EVENT:
     data.e->rc--;
     if (data.e->rc == 0) {
+      destroy();
+    }
+    break;
+  case STRUCT:
+    data.st->rc--;
+    if (data.st->rc == 0) {
       destroy();
     }
     break;
@@ -767,6 +803,13 @@ void InternValue::destroy() {
     }
     data.e->~InternEvent();
     std::free(data.e);
+    break;
+  case STRUCT:
+    for (std::uint16_t i = 0; i < data.st->fieldc; ++i) {
+      data.st->fields[i].dec();
+    }
+    data.st->~InternStruct();
+    std::free(data.st);
     break;
   case NIL:
   case INT:
@@ -796,6 +839,19 @@ InternValue InternValue::of_event(std::uint32_t event_tag,
     ev->args[i] = args[i];
   }
   return {{.e = ev}, EVENT};
+}
+
+InternValue InternValue::of_struct(std::uint32_t struct_tag,
+                                   std::span<const InternValue> fields) {
+  void *mem = std::malloc(offsetof(InternStruct, fields) +
+                          sizeof(InternValue) * fields.size());
+  auto st = new (mem)
+      InternStruct{1, struct_tag, static_cast<std::uint16_t>(fields.size())};
+
+  for (std::size_t i = 0; i < fields.size(); ++i) {
+    st->fields[i] = fields[i];
+  }
+  return {{.st = st}, STRUCT};
 }
 
 const std::string_view InternValue::as_string() const {
@@ -829,6 +885,20 @@ bool InternValue::operator==(const InternValue &other) const {
       if (data.e->args[i] != other.data.e->args[i])
         return false;
     }
+    return true;
+  } break;
+  case STRUCT: {
+    if (data.st->tag != other.data.st->tag ||
+        data.st->fieldc != other.data.st->fieldc) {
+      return false;
+    }
+
+    for (std::uint16_t i = 0; i < data.st->fieldc; ++i) {
+      if (data.st->fields[i] != other.data.st->fields[i]) {
+        return false;
+      }
+    }
+
     return true;
   } break;
   }

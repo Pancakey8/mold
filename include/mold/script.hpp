@@ -22,9 +22,14 @@ struct Event {
 using Date = std::chrono::sys_time<std::chrono::nanoseconds>;
 using Time = std::chrono::nanoseconds;
 
+struct Struct {
+  std::string_view kind;
+  std::vector<Value> fields;
+};
+
 struct Value {
   std::variant<std::monostate, std::int64_t, double, bool, std::string, Event,
-               Date, Time>
+               Date, Time, Struct>
       data;
 };
 
@@ -61,11 +66,11 @@ public:
 
   void on(std::string_view event, HandlerFn fn);
 
-  Script(Script&&) noexcept;
-  Script& operator=(Script&&) noexcept;
+  Script(Script &&) noexcept;
+  Script &operator=(Script &&) noexcept;
 
-  Script(const Script&) = delete;
-  Script& operator=(const Script&) = delete;
+  Script(const Script &) = delete;
+  Script &operator=(const Script &) = delete;
 
   ~Script();
 
@@ -97,6 +102,15 @@ template <> struct std::formatter<mold::Value> {
                 out = std::format_to(out, ", ");
               }
               out = std::format_to(out, "{}", data.args[i]);
+            }
+            return std::format_to(out, ")");
+          } else if constexpr (std::is_same_v<T, mold::Struct>) {
+            auto out = std::format_to(ctx.out(), "{}(", data.kind);
+            for (std::size_t i = 0; i < data.fields.size(); ++i) {
+              if (i > 0) {
+                out = std::format_to(out, ", ");
+              }
+              out = std::format_to(out, "{}", data.fields[i]);
             }
             return std::format_to(out, ")");
           } else if constexpr (std::is_same_v<T, mold::Date>) {
