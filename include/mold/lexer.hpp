@@ -34,6 +34,9 @@ namespace mold::internal {
   X(QUES)                                                                      \
   X(LPAREN)                                                                    \
   X(RPAREN)                                                                    \
+  X(LCURLY)                                                                    \
+  X(RCURLY)                                                                    \
+  X(ARROW)                                                                     \
   X(KW_LET)                                                                    \
   X(DEF_EQ)                                                                    \
   X(KW_IN)                                                                     \
@@ -50,6 +53,7 @@ namespace mold::internal {
   X(KW_PURE)                                                                   \
   X(KW_IMPURE)                                                                 \
   X(KW_FUNCTION)                                                               \
+  X(KW_STRUCT)                                                                 \
   X(ERROR)
 
 struct Source {
@@ -101,4 +105,4 @@ private:
   bool eof();
 };
 
-}; // namespace foo::internal
+}; // namespace mold::internal

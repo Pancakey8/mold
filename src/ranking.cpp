@@ -40,7 +40,9 @@ void typed_deps(NodeId node, const TypedAST &ast,
           },
           [&](const BinaryOp &n) {
             typed_deps(n.left, ast, deps, locals);
-            typed_deps(n.right, ast, deps, locals);
+            if (n.kind != BinaryOp::MEMB) {
+              typed_deps(n.right, ast, deps, locals);
+            }
           },
           [&](const LetIn &n) {
             typed_deps(n.init, ast, deps, locals);
@@ -60,6 +62,11 @@ void typed_deps(NodeId node, const TypedAST &ast,
               typed_deps(p, ast, deps, locals);
             }
           },
+          [&](const StructConst &n) {
+            for (auto [k, p] : n.inits) {
+              typed_deps(p, ast, deps, locals);
+            }
+          },
           [&](const TypeName &) {},
           [&](const Input &) {},
           [&](const Output &) {},
@@ -73,6 +80,7 @@ void typed_deps(NodeId node, const TypedAST &ast,
             typed_deps(n.init, ast, deps, locals);
             locals.resize(locals.size() - n.params.size());
           },
+          [&](const StructDef &) {},
           [&](const Error &) {},
           [&](const Inline &n) {
             for (auto p : n.params) {

@@ -94,6 +94,8 @@ void Lexer::next() {
       kind = Token::KW_IMPURE;
     } else if (value == "function") {
       kind = Token::KW_FUNCTION;
+    } else if (value == "struct") {
+      kind = Token::KW_STRUCT;
     } else {
       kind = Token::IDENT;
     }
@@ -201,6 +203,11 @@ void Lexer::next() {
     current = Token{Source{start, cursor}, {}, Token::SHR};
     return;
   }
+  if (c == '-' && peek() == '>') {
+    advance();
+    current = Token{Source{start, cursor}, {}, Token::ARROW};
+    return;
+  }
 
   Token::Kind kind;
   switch (c) {
@@ -242,6 +249,12 @@ void Lexer::next() {
     break;
   case ')':
     kind = Token::RPAREN;
+    break;
+  case '{':
+    kind = Token::LCURLY;
+    break;
+  case '}':
+    kind = Token::RCURLY;
     break;
   case ',':
     kind = Token::COMMA;

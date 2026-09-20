@@ -600,6 +600,12 @@ void Interpreter::run() {
       }
       ip++;
     } break;
+    case Op::MKSTR: {
+      // TODO
+    } break;
+    case Op::MEMB: {
+      // TODO
+    } break;
     }
   }
 exit:

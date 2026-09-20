@@ -18,13 +18,23 @@ struct Inline {
   NodeId formula;
 };
 
-#define TYPE_BASE_LIST(X)                                                      \
+#define TYPE_BUILTIN_LIST(X)                                                   \
   X(INT) X(REAL) X(BOOL) X(STRING) X(DATE) X(TIME) X(EVENT)
 
 struct MoldType {
 #define X(T) T,
-  enum Base { FAIL, TYPE_BASE_LIST(X) } base;
+  enum Builtin : std::uint32_t { FAIL, TYPE_BUILTIN_LIST(X) COUNT_ };
 #undef X
+  struct Base {
+    std::uint32_t id;
+
+    Base() = default;
+    Base(MoldType::Builtin builtin) : id(builtin) {}
+    Base(std::uint32_t id) : id(id) {}
+
+    bool operator==(const Base &other) const = default;
+  };
+  Base base;
   bool nullable;
 
   std::string show() const;
@@ -69,24 +79,6 @@ private:
   std::vector<TypedNode> nodes;
 };
 
-struct TypedAST {
-  TypedNodePool pool;
-  std::vector<NodeId> tls;
-  std::flat_map<NodeId, MoldType::Base> casts;
-
-  TypedNode &operator[](NodeId id) { return pool[id]; }
-  const TypedNode &operator[](NodeId id) const { return pool[id]; }
-
-  NodeId begin() const { return pool.begin(); }
-  NodeId end() const { return pool.end(); }
-  NodeId::Type size() const { return pool.size(); }
-};
-
-struct UFNode {
-  std::uint32_t parent;
-  std::optional<MoldType::Base> base;
-};
-
 struct InternType {
   union {
     MoldType::Base base;
@@ -102,6 +94,31 @@ struct InternType {
   static InternType var(std::uint32_t id, bool n = false) {
     return {{.var_id = id}, true, n};
   }
+};
+
+struct StructSig {
+  std::uint32_t id;
+  std::unordered_map<std::string_view, InternType> fields;
+  std::vector<std::string_view> order;
+};
+
+struct TypedAST {
+  TypedNodePool pool;
+  std::vector<NodeId> tls;
+  std::flat_map<NodeId, MoldType::Base> casts;
+  std::unordered_map<std::string_view, StructSig> structs;
+
+  TypedNode &operator[](NodeId id) { return pool[id]; }
+  const TypedNode &operator[](NodeId id) const { return pool[id]; }
+
+  NodeId begin() const { return pool.begin(); }
+  NodeId end() const { return pool.end(); }
+  NodeId::Type size() const { return pool.size(); }
+};
+
+struct UFNode {
+  std::uint32_t parent;
+  std::optional<MoldType::Base> base;
 };
 
 struct TypeMatch {
@@ -139,6 +156,8 @@ private:
   std::vector<std::pair<std::string_view, InternType>> locals{};
   std::unordered_map<std::string_view, InternType> globals{};
   std::unordered_map<std::string_view, Signature> sigs{};
+  std::uint32_t struct_top{MoldType::COUNT_};
+  std::unordered_map<std::string_view, StructSig> structs{};
   std::flat_map<NodeId, MoldType::Base> casts{};
   std::vector<Diagnostic> diags{};
 
@@ -164,6 +183,8 @@ private:
   NodeId push_node(TypedNode::Var var, Source src, InternType t);
 
   InternType lookup(std::string_view name);
+
+  std::optional<std::string_view> ns_of(MoldType::Base base);
 
   bool assignable(NodeId arg_id, InternType arg, InternType param);
 

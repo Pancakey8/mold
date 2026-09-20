@@ -52,6 +52,9 @@ Script::Script(std::unique_ptr<Impl> impl) : impl(std::move(impl)) {}
 std::expected<Script, std::vector<mold::Diagnostic>>
 Script::of_string(std::string_view input) {
   auto ast = Parser{{input}}.parse();
+  for (auto id = ast.begin(); id != ast.end(); ++id) {
+    std::println("{}", ast[id].show(ast.pool));
+  }
   auto [sorting, sort_diags] = TopoSort{ast}.run();
   auto [typed, ast_diags] = Typing{ast, sorting}.run();
   if (!sort_diags.empty() || !ast_diags.empty()) {
@@ -68,10 +71,13 @@ Script::of_string(std::string_view input) {
 
     return std::unexpected(std::move(diags));
   }
+  for (auto id = typed.begin(); id != typed.end(); ++id) {
+    std::println("TYPED {}", typed[id].show(typed.pool));
+  }
   auto hir = Compiler{typed}.run();
-  // for (const auto &instr : hir) {
-  //   std::println("{}", instr.show());
-  // }
+  for (const auto &instr : hir) {
+    std::println("{}", instr.show());
+  }
   auto [prog, syms] = HighToLow{hir}.run();
   // for (const auto &instr : prog.instrs) {
   //   std::println("{}", instr.show());

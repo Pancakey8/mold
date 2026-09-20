@@ -4,8 +4,8 @@
 #include "mold/diagnostics.hpp"
 #include "mold/sort.hpp"
 #include "mold/utils.hpp"
+#include <cassert>
 #include <flat_map>
-#include <flat_set>
 #include <format>
 #include <print>
 
@@ -19,6 +19,20 @@ std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
     }
     sig.ret = InternType::concrete(b.ret.base, b.ret.nullable);
     sigs[b.name] = std::move(sig);
+  }
+
+  for (const auto &[name, n] : sorting.tls_names) {
+    if (auto s = std::get_if<StructDef>(&ast[n].data)) {
+      StructSig sig{};
+      sig.id = struct_top++;
+      for (auto &[fname, fty] : s->fields) {
+        auto field = infer(fty);
+        sig.fields[fname] = inferred[field.id];
+        sig.order.push_back(fname);
+      }
+      std::println("struct {}", name);
+      structs[name] = sig;
+    }
   }
 
   std::vector<NodeId> tls{};
@@ -40,12 +54,10 @@ std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
     pool[id].type = to_mold_type(inferred[id.id]);
   }
 
-  return std::make_pair(
-      TypedAST{std::move(pool), std::move(tls), std::move(casts)},
-      std::move(diags));
+  return std::make_pair(TypedAST{std::move(pool), std::move(tls),
+                                 std::move(casts), std::move(structs)},
+                        std::move(diags));
 }
-
-std::optional<std::string_view> ns_of(MoldType::Base base);
 
 NodeId Typing::infer(NodeId id) {
   return std::visit(
@@ -75,6 +87,52 @@ NodeId Typing::infer(NodeId id) {
           [&](const BinaryOp &n) -> NodeId {
             auto l = infer(n.left);
             auto ty_l = inferred[l.id];
+
+            if (n.kind == BinaryOp::MEMB) {
+              if (!std::holds_alternative<Ident>(ast[n.right].data)) {
+                auto r = infer(n.right);
+                diags.emplace_back("Member access expects identifier on RHS",
+                                   ast[id].source);
+                return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
+
+              auto fname = std::get<Ident>(ast[n.right].data).name;
+
+              auto r = push_node(Ident{fname}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+
+              auto l_base = get_base(ty_l);
+              if (!l_base) {
+                diags.emplace_back("Member access on unresolved type",
+                                   ast[id].source);
+                return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
+
+              auto it = std::find_if(
+                  structs.begin(), structs.end(),
+                  [&](const auto &p) { return p.second.id == l_base->id; });
+              if (it == structs.end()) {
+                diags.emplace_back("Member access to invalid struct type",
+                                   ast[id].source);
+                return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
+
+              auto field = it->second.fields.find(fname);
+              if (field == it->second.fields.end()) {
+                diags.emplace_back("Access to non-existent member",
+                                   ast[id].source);
+                return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                                 InternType::concrete(MoldType::FAIL));
+              }
+
+              inferred[r.id] = field->second;
+              return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                               field->second);
+            }
+
             auto r = infer(n.right);
             auto ty_r = inferred[r.id];
 
@@ -211,6 +269,11 @@ NodeId Typing::infer(NodeId id) {
               auto res = join(ast[id].source, l, r, ty_l, ty_r, ty_r.nullable);
               return push_node(BinaryOp{n.kind, l, r}, ast[id].source, res);
             } break;
+            case BinaryOp::MEMB: {
+              // Not handled here
+              return push_node(BinaryOp{n.kind, l, r}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
+            } break;
             }
           },
           [&](const LetIn &n) -> NodeId {
@@ -278,8 +341,8 @@ NodeId Typing::infer(NodeId id) {
 
             if (!resolved && !n.params.empty()) {
               first = infer(n.params.front());
-              if (!inferred[first.id].is_var) {
-                if (auto ns = ns_of(inferred[first.id].base)) {
+              if (auto base = get_base(inferred[first.id])) {
+                if (auto ns = ns_of(*base)) {
                   auto exp = std::format("{}.{}", *ns, n.name);
                   if (auto it = sorting.tls_names.find(exp);
                       it != sorting.tls_names.end()) {
@@ -374,6 +437,49 @@ NodeId Typing::infer(NodeId id) {
             return push_node(FuncCall{name, {}}, ast[id].source,
                              InternType::concrete(MoldType::FAIL));
           },
+          [&](const StructConst &n) -> NodeId {
+            auto it = structs.find(n.name);
+            if (it == structs.end()) {
+              diags.emplace_back("Unknown struct", ast[id].source);
+              return push_node(StructConst{n.name, {}}, ast[id].source,
+                               InternType::concrete(MoldType::FAIL));
+            }
+            const auto &sig = it->second;
+
+            std::vector<std::pair<std::string_view, NodeId>> inits;
+            bool all_ok{true};
+            for (const auto &[fname, fexpr] : n.inits) {
+              auto expr = infer(fexpr);
+              inits.push_back({fname, expr});
+
+              auto fit = sig.fields.find(fname);
+              if (fit == sig.fields.end()) {
+                diags.emplace_back("Unknown field in struct constructor",
+                                   ast[fexpr].source);
+                all_ok = false;
+                continue;
+              }
+
+              if (!assignable(expr, inferred[expr.id], fit->second)) {
+                diags.emplace_back("Field type doesn't fit initializer",
+                                   ast[fexpr].source);
+                all_ok = false;
+                continue;
+              }
+            }
+
+            if (n.inits.size() != sig.fields.size()) {
+              diags.emplace_back("Incorrect number of fields in constructor",
+                                 ast[id].source);
+              all_ok = false;
+            }
+
+            auto res_ty = all_ok ? InternType::concrete(sig.id)
+                                 : InternType::concrete(MoldType::FAIL);
+
+            return push_node(StructConst{n.name, std::move(inits)},
+                             ast[id].source, res_ty);
+          },
           [&](const TypeName &n) -> NodeId {
             MoldType::Base base{MoldType::FAIL};
             if (n.base == "Int") {
@@ -390,6 +496,10 @@ NodeId Typing::infer(NodeId id) {
               base = MoldType::TIME;
             } else if (n.base == "Event") {
               base = MoldType::EVENT;
+            } else {
+              if (auto it = structs.find(n.base); it != structs.end()) {
+                base = it->second.id;
+              }
             }
             // std::println("Resolving {} {}", n.base, n.nullable);
             return push_node(n, ast[id].source,
@@ -443,8 +553,7 @@ NodeId Typing::infer(NodeId id) {
                       "Type failed to unify with previous assumption",
                       ast[id].source);
                   globals[n.name] = InternType::concrete(MoldType::FAIL);
-                  return push_node(Formula{n.name, type, init},
-                                   ast[id].source,
+                  return push_node(Formula{n.name, type, init}, ast[id].source,
                                    InternType::concrete(MoldType::FAIL));
                 }
               }
@@ -517,6 +626,10 @@ NodeId Typing::infer(NodeId id) {
                              ast[id].source, sig.ret);
           },
           [&](const Function &) -> NodeId {
+            // Not individually handled
+            return NODEID_NONE;
+          },
+          [&](const StructDef &) -> NodeId {
             // Not individually handled
             return NODEID_NONE;
           },
@@ -597,7 +710,7 @@ InternType Typing::join(Source from, NodeId l, NodeId r, InternType a,
    {MoldType::T, res_nullable}},
   Constraint c{.nodes = {l, r, NODEID_NONE},
                .vars = {a, b, res},
-               .cases = {TYPE_BASE_LIST(X)},
+               .cases = {TYPE_BUILTIN_LIST(X)},
                .from = from};
 #undef X
   c.cases.push_back({{MoldType::INT, a.nullable, MoldType::REAL},
@@ -606,6 +719,10 @@ InternType Typing::join(Source from, NodeId l, NodeId r, InternType a,
   c.cases.push_back({{MoldType::REAL, a.nullable},
                      {MoldType::INT, b.nullable, MoldType::REAL},
                      {MoldType::REAL, res_nullable}});
+  for (auto &[name, sig] : structs) {
+    c.cases.push_back(
+        {{sig.id, a.nullable}, {sig.id, b.nullable}, {sig.id, res_nullable}});
+  }
   ctrs.push_back(std::move(c));
   propagate();
   return res;
@@ -757,8 +874,8 @@ bool Typing::assignable(NodeId arg_id, InternType arg, InternType param) {
   return false;
 }
 
-std::optional<std::string_view> ns_of(MoldType::Base base) {
-  switch (base) {
+std::optional<std::string_view> Typing::ns_of(MoldType::Base base) {
+  switch (base.id) {
   case MoldType::FAIL:
     return {};
   case MoldType::INT:
@@ -776,11 +893,18 @@ std::optional<std::string_view> ns_of(MoldType::Base base) {
   case MoldType::EVENT:
     return "Event";
   }
+
+  for (auto &[name, sig] : structs) {
+    if (sig.id == base)
+      return name;
+  }
+
+  return {};
 }
 
 std::string MoldType::show() const {
   std::string_view base_str;
-  switch (base) {
+  switch (base.id) {
   case FAIL:
     base_str = "Fail";
     break;
@@ -804,6 +928,10 @@ std::string MoldType::show() const {
     break;
   case EVENT:
     base_str = "Event";
+    break;
+  default:
+    // TODO: Get name here
+    base_str = "USER_DEF!";
     break;
   }
 
@@ -846,7 +974,7 @@ std::string map_str(const std::vector<std::pair<std::string_view, NodeId>> &m,
 }
 
 std::string TypedNode::show(const TypedNodePool &pool) const {
-  std::string_view tag;
+  std::string_view tag = "UNKNOWN";
 #define X(N, I)                                                                \
   I(std::holds_alternative<N>(data)) { tag = #N; }
 #define F(N) X(N, if)
@@ -886,6 +1014,10 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
             return std::format("name={}, params={}", n.name,
                                node_vec_str(n.params, pool));
           },
+          [&](const StructConst &n) {
+            return std::format("name={}, inits={}", n.name,
+                               map_str(n.inits, pool));
+          },
           [&](const TypeName &n) {
             return std::format("base={}, nullable={}", n.base, n.nullable);
           },
@@ -914,6 +1046,10 @@ std::string TypedNode::show(const TypedNodePool &pool) const {
             return std::format("name={}, params={}, init={}", n.name,
                                string_vec_str(n.params),
                                node_str(n.init, pool));
+          },
+          [&](const StructDef &n) {
+            return std::format("name={}, fields={}", n.name,
+                               map_str(n.fields, pool));
           },
           [&](const Error &n) { return std::format("msg={}", n.msg); },
           [&](const Inline &n) {

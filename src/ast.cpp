@@ -115,6 +115,10 @@ std::string Node::show(const NodePool &pool) const {
             return std::format("name={}, params={}", n.name,
                                node_vec_str(n.params, pool));
           },
+          [&](const StructConst &n) {
+            return std::format("name={}, inits={}", n.name,
+                               map_str(n.inits, pool));
+          },
           [&](const TypeName &n) {
             return std::format("base={}, nullable={}", n.base, n.nullable);
           },
@@ -143,6 +147,10 @@ std::string Node::show(const NodePool &pool) const {
             return std::format("name={}, params={}, init={}", n.name,
                                string_vec_str(n.params),
                                node_str(n.init, pool));
+          },
+          [&](const StructDef &n) {
+            return std::format("name={}, fields={}", n.name,
+                               map_str(n.fields, pool));
           },
           [&](const Error &n) { return std::format("msg={}", n.msg); }},
       data);

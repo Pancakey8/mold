@@ -2,6 +2,7 @@
 #include "mold/ast.hpp"
 #include "mold/diagnostics.hpp"
 #include "mold/utils.hpp"
+#include <print>
 #include <queue>
 #include <unordered_map>
 
@@ -9,8 +10,10 @@ namespace mold::internal {
 
 void TopoSort::deps_of(NodeId node, std::vector<std::string_view> &deps,
                        std::vector<std::string_view> &locals) {
-  std::visit(overload{[&](const LitInt &) {}, [&](const LitReal &) {},
-                      [&](const LitBool &) {}, [&](const LitString &) {},
+  std::visit(overload{[&](const LitInt &) {},
+                      [&](const LitReal &) {},
+                      [&](const LitBool &) {},
+                      [&](const LitString &) {},
                       [&](const LitNull &) {},
                       [&](const Ident &n) {
                         if (std::find(locals.begin(), locals.end(), n.name) ==
@@ -24,7 +27,9 @@ void TopoSort::deps_of(NodeId node, std::vector<std::string_view> &deps,
                       },
                       [&](const BinaryOp &n) {
                         deps_of(n.left, deps, locals);
-                        deps_of(n.right, deps, locals);
+                        if (n.kind != BinaryOp::MEMB) {
+                          deps_of(n.right, deps, locals);
+                        }
                       },
                       [&](const LetIn &n) {
                         deps_of(n.init, deps, locals);
@@ -45,7 +50,13 @@ void TopoSort::deps_of(NodeId node, std::vector<std::string_view> &deps,
                           deps_of(p, deps, locals);
                         }
                       },
-                      [&](const TypeName &) {}, [&](const Input &) {},
+                      [&](const StructConst &n) {
+                        for (const auto &[name, p] : n.inits) {
+                          deps_of(p, deps, locals);
+                        }
+                      },
+                      [&](const TypeName &) {},
+                      [&](const Input &) {},
                       [&](const Output &) {},
                       [&](const Formula &n) { deps_of(n.init, deps, locals); },
                       [&](const Signal &n) { deps_of(n.init, deps, locals); },
@@ -57,6 +68,7 @@ void TopoSort::deps_of(NodeId node, std::vector<std::string_view> &deps,
                         deps_of(n.init, deps, locals);
                         locals.resize(locals.size() - n.params.size());
                       },
+                      [&](const StructDef &) {},
                       [&](const Error &) {}},
              ast[node].data);
 }
@@ -67,9 +79,10 @@ std::pair<SortResult, std::vector<Diagnostic>> TopoSort::run() {
 
   for (auto id : ast.tls) {
     const auto &node = ast[id];
-    if (!node.is_toplevel()) // Errors
+    if (!node.is_toplevel()) // Errors. TODO: Top-level error reporting
       continue;
     auto name = node.toplevel_name();
+    std::println("TL {}", name);
     if (tls.contains(name)) {
       diags.emplace_back("Redefinition of existing top-level name",
                          node.source);

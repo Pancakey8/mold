@@ -68,9 +68,28 @@ void Compiler::compile(NodeId id) {
             }
           },
           [&](const BinaryOp &n) {
-            compile(n.left);
-            compile(n.right);
-            compile_binop(n.kind);
+            if (n.kind == BinaryOp::MEMB) {
+              compile(n.left);
+              auto id = ast[n.left].type.base;
+              auto fname = std::get<Ident>(ast[n.right].data).name;
+
+              auto str = std::find_if(
+                  ast.structs.begin(), ast.structs.end(),
+                  [&](const auto &p) { return p.second.id == id.id; });
+              assert(str != ast.structs.end());
+
+              auto field = std::find(str->second.order.begin(),
+                                     str->second.order.end(), fname);
+              assert(field != str->second.order.end());
+              auto n = std::distance(str->second.order.begin(), field);
+
+              instrs.emplace_back(
+                  HInstr::Memb{str->first, static_cast<HInstr::FieldId>(n)});
+            } else {
+              compile(n.left);
+              compile(n.right);
+              compile_binop(n.kind);
+            }
           },
           [&](const LetIn &n) {
             compile(n.init);
@@ -119,6 +138,21 @@ void Compiler::compile(NodeId id) {
               instrs.emplace_back(HInstr::Call{
                   n.name, static_cast<std::uint16_t>(n.params.size())});
             }
+          },
+          [&](const StructConst &n) {
+            instrs.emplace_back(
+                HInstr::Comment{std::format("inits {}:", n.name)});
+            const auto &sig = ast.structs.at(n.name);
+            for (auto fname : sig.order) {
+              auto it = std::find_if(n.inits.begin(), n.inits.end(),
+                                     [&](auto p) { return p.first == fname; });
+              assert(it != n.inits.end());
+              instrs.emplace_back(
+                  HInstr::Comment{std::format("- init {}:", fname)});
+              compile(it->second);
+            }
+            instrs.emplace_back(
+                HInstr::MkStr{n.name, static_cast<uint16_t>(sig.order.size())});
           },
           [&](const TypeName &) {}, // N/A here
           [&](const Input &n) {
@@ -183,7 +217,8 @@ void Compiler::compile(NodeId id) {
               }
             }
           },
-          [&](const Function &) {}, // N/A here
+          [&](const Function &) {},  // N/A here
+          [&](const StructDef &) {}, // N/A here
           [&](const Error &) {},
           [&](const Inline &n) {
             for (auto par : n.params | std::ranges::views::reverse) {
@@ -266,6 +301,9 @@ void Compiler::compile_binop(BinaryOp::Kind id) {
   case BinaryOp::COAL:
     instrs.emplace_back(HInstr::Coal{});
     break;
+  case BinaryOp::MEMB:
+    // Not handled here
+    break;
   }
 }
 
@@ -306,6 +344,12 @@ void HighToLow::lower(const HInstr &instr) {
   std::visit(
       overload{
           [&](const HInstr::Upcast &) { lo.emplace_back(Op::UPCAST); },
+          [&](const HInstr::MkStr &i) {
+            lo.emplace_back(Op::MKSTR, struct_at(i.str), i.initc);
+          },
+          [&](const HInstr::Memb &i) {
+            lo.emplace_back(Op::MEMB, struct_at(i.str), i.field);
+          },
           [&](const HInstr::Comment &) {},
           [&](const HInstr::Term &) { lo.emplace_back(Op::TERM); },
           [&](const HInstr::Dispatch &i) {
@@ -406,6 +450,10 @@ std::uint32_t HighToLow::ext_at(HInstr::ExtId id) {
   return get_or_insert(syms.exts, id);
 }
 
+std::uint32_t HighToLow::struct_at(HInstr::StructId id) {
+  return get_or_insert(syms.structs, id);
+}
+
 std::string HInstr::show() const {
   if (auto com = std::get_if<Comment>(&data)) {
     return std::format("# {}", com->message);
@@ -438,6 +486,8 @@ std::string HInstr::show() const {
     [](const VertLabel& n) -> std::string { return std::format("[{}]", n.vert); },
     [](const Pull& n) -> std::string { return std::format("[{}]", n.glob); },
     [](const Dispatch& n) -> std::string { return std::format("[{}]", n.glob); },
+    [](const Memb& n) -> std::string { return std::format("[{}]", n.field); },
+    [](const MkStr& n) -> std::string { return std::format("[{}], {}", n.str, n.initc); },
     [](auto&&) -> std::string { return ""; }
   }, data);
   // clang-format on

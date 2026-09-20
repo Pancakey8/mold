@@ -14,6 +14,8 @@ namespace mold::internal {
 
 #define OP_LIST(X)                                                             \
   X(UPCAST)                                                                    \
+  X(MKSTR)                                                                     \
+  X(MEMB)                                                                      \
   X(TERM)                                                                      \
   X(DISPATCH)                                                                  \
   X(PULL)                                                                      \
@@ -76,6 +78,8 @@ struct Instr {
 
 #define HINSTR_KIND_LIST(FIRST, REST)                                          \
   FIRST(Upcast)                                                                \
+  REST(MkStr)                                                                  \
+  REST(Memb)                                                                   \
   REST(Comment)                                                                \
   REST(Term)                                                                   \
   REST(Dispatch)                                                               \
@@ -124,6 +128,8 @@ struct HInstr {
   using ExtId = std::string_view;
   using EventId = std::string_view;
   using VertId = std::string_view;
+  using StructId = std::string_view;
+  using FieldId = std::uint16_t;
 
   struct Const {
     ConstVal val;
@@ -235,6 +241,16 @@ struct HInstr {
     std::string message;
   };
 
+  struct Memb {
+    StructId str;
+    FieldId field;
+  };
+
+  struct MkStr {
+    StructId str;
+    std::uint16_t initc;
+  };
+
   struct Upcast {};
 
 #define F(T) T
@@ -261,6 +277,7 @@ struct SymbolTable {
   std::vector<HInstr::VertId> verts{};
   std::vector<HInstr::EventId> events{};
   std::vector<HInstr::ExtId> exts{};
+  std::vector<HInstr::StructId> structs{};
 };
 
 class Compiler {
@@ -301,6 +318,7 @@ private:
   std::uint32_t vert_at(HInstr::VertId id);
   std::uint32_t event_at(HInstr::EventId id);
   std::uint32_t ext_at(HInstr::ExtId id);
+  std::uint32_t struct_at(HInstr::StructId id);
 
   std::vector<std::uint32_t> vert_fixups{};
   std::flat_map<std::uint32_t, std::uint32_t> vert_labels{};

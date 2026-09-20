@@ -1,6 +1,7 @@
 #include "mold/parser.hpp"
 #include "mold/ast.hpp"
 #include "mold/lexer.hpp"
+#include <print>
 
 namespace mold::internal {
 
@@ -57,7 +58,7 @@ NodeId Parser::parse_atom() {
     auto body = parse_expr();
 
     return pool.push(
-                     {LetIn{name, type, init, body}, start->source + pool[body].source});
+        {LetIn{name, type, init, body}, start->source + pool[body].source});
   }
   case Token::KW_IF: {
     lexer.next();
@@ -130,6 +131,40 @@ NodeId Parser::parse_atom() {
       auto end_src = lexer.get()->source;
       lexer.next();
       return pool.push({FuncCall{name, std::move(params)}, src + end_src});
+    } else if (lexer.get() && lexer.get()->kind == Token::LCURLY) {
+      lexer.next();
+      std::vector<std::pair<std::string_view, NodeId>> inits{};
+      while (lexer.get() && lexer.get()->kind != Token::RCURLY) {
+        expect(IDENT);
+        auto field_name = lexer.get()->data.ident;
+        auto field_src = lexer.get()->source;
+        lexer.next();
+
+        expect(DEF_EQ);
+        lexer.next();
+
+        NodeId expr = parse_expr();
+
+        if (std::find_if(inits.begin(), inits.end(), [&](const auto &p) {
+              return p.first == field_name;
+            }) != inits.end()) {
+          return pool.push({Error{"Duplicate field name"}, field_src});
+        }
+
+        inits.push_back({field_name, expr});
+
+        if (lexer.get() && lexer.get()->kind == Token::COMMA) {
+          lexer.next();
+        } else {
+          break;
+        }
+      }
+
+      expect(RCURLY);
+      auto end_src = lexer.get()->source;
+      lexer.next();
+
+      return pool.push({StructConst{name, std::move(inits)}, src + end_src});
     }
 
     return pool.push({Ident{name}, src});
@@ -186,6 +221,8 @@ int prec_of(Token::Kind tok) {
     return 70;
   case Token::QUES:
     return 80;
+  case Token::ARROW:
+    return 90;
   default:
     return -1;
   }
@@ -229,6 +266,8 @@ BinaryOp::Kind binop_kind_of(Token::Kind tok) {
     return BinaryOp::MOD;
   case Token::QUES:
     return BinaryOp::COAL;
+  case Token::ARROW:
+    return BinaryOp::MEMB;
   default:
     assert(false && "Invalid binary operator token");
   }
@@ -381,7 +420,8 @@ NodeId Parser::parse_tl() {
 
     NodeId init = parse_expr();
 
-    return pool.push({Formula{name, type, init}, start->source + pool[init].source});
+    return pool.push(
+        {Formula{name, type, init}, start->source + pool[init].source});
   }
   case Token::KW_SIGNAL: {
     lexer.next();
@@ -469,6 +509,33 @@ NodeId Parser::parse_tl() {
 
     return pool.push({Function{name, std::move(params), init},
                       start->source + pool[init].source});
+  }
+  case Token::KW_STRUCT: {
+    lexer.next();
+    expect(IDENT);
+    auto name = lexer.get()->data.ident;
+    lexer.next();
+
+    expect(LCURLY);
+    lexer.next();
+
+    auto fields = parse_param_list(Token::RCURLY);
+
+    expect(RCURLY);
+    auto end_src = lexer.get()->source;
+    lexer.next();
+
+    for (auto &[fname, ftype] : fields) {
+      if (std::count_if(fields.begin(), fields.end(),
+                        [&fname](auto f) { return f.first == fname; }) != 1) {
+        return pool.push({Error{"Duplicate field name"}, pool[ftype].source});
+      }
+    }
+
+    std::println("Parse struct {}", name);
+
+    return pool.push(
+        {StructDef{name, std::move(fields)}, start->source + end_src});
   }
   default:
     lexer.next();

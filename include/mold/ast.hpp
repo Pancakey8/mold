@@ -64,6 +64,7 @@ struct Ident {
   X(MULT)                                                                      \
   X(DIV)                                                                       \
   X(MOD)                                                                       \
+  X(MEMB)                                                                      \
   X(COAL)
 
 struct BinaryOp {
@@ -95,6 +96,11 @@ struct PreVal {
 struct FuncCall {
   std::string_view name;
   std::vector<NodeId> params;
+};
+
+struct StructConst {
+  std::string_view name;
+  std::vector<std::pair<std::string_view, NodeId>> inits;
 };
 
 struct TypeName {
@@ -136,6 +142,11 @@ struct Function {
   NodeId init;
 };
 
+struct StructDef {
+  std::string_view name;
+  std::vector<std::pair<std::string_view, NodeId>> fields;
+};
+
 struct Error {
   std::string_view msg;
 };
@@ -154,6 +165,7 @@ class NodePool;
   R(IfElse)                                                                    \
   R(PreVal)                                                                    \
   R(FuncCall)                                                                  \
+  R(StructConst)                                                               \
   R(TypeName)                                                                  \
   R(Input)                                                                     \
   R(Output)                                                                    \
@@ -161,6 +173,7 @@ class NodePool;
   R(Signal)                                                                    \
   R(Extern)                                                                    \
   R(Function)                                                                  \
+  R(StructDef)                                                                 \
   R(Error)
 
 struct Node {
@@ -176,7 +189,8 @@ struct Node {
   constexpr static bool is_toplevel_v =
       std::is_same_v<T, Input> || std::is_same_v<T, Output> ||
       std::is_same_v<T, Formula> || std::is_same_v<T, Signal> ||
-      std::is_same_v<T, Extern> || std::is_same_v<T, Function>;
+      std::is_same_v<T, Extern> || std::is_same_v<T, Function> ||
+      std::is_same_v<T, StructDef>;
 
   bool is_toplevel() const;
 
