@@ -11,6 +11,7 @@ set(TEST_SOURCES
   null_compat.cpp
   annotations.cpp
   doc-30-example-1.cpp
+  self-trigger.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})
