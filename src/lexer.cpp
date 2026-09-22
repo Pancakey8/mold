@@ -111,7 +111,7 @@ void Lexer::next() {
     return;
   }
 
-  if (is_num(c)) {
+  if (is_num(c) || (c == '-' && is_num(peek())) || (c == '+' && is_num(peek()))) {
     bool is_real = false;
     while (!eof() && is_num(peek())) {
       advance();

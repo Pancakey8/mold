@@ -12,6 +12,7 @@ struct Ranking {
   std::flat_map<NodeId, std::vector<NodeId>> deps;
   std::flat_map<NodeId, std::uint16_t> ranks;
   std::flat_map<NodeId, char> builtins{};
+  std::vector<std::string_view> zero_formulas{};
 };
 
 Ranking ranks_of(const TypedAST &ast);

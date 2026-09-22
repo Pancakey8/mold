@@ -5,6 +5,7 @@
 #include "mold/utils.hpp"
 #include <algorithm>
 #include <flat_map>
+#include <print>
 #include <queue>
 #include <string_view>
 #include <variant>
@@ -133,6 +134,9 @@ Ranking ranks_of(const TypedAST &ast) {
     }
   }
 
+  // std::println("{}", tls);
+  // std::println("{} | {}", graph, degrees);
+
   std::vector<NodeId> order{};
   std::queue<NodeId> work{};
 
@@ -183,7 +187,18 @@ Ranking ranks_of(const TypedAST &ast) {
     }
   }
 
-  return {std::move(graph), std::move(ranks), std::move(impure_builtin_calls)};
+  std::vector<std::string_view> zeros{};
+  for (auto [id, r] : ranks) {
+    if (std::holds_alternative<Formula>(ast[id].data) ||
+        std::holds_alternative<Signal>(ast[id].data)) {
+      if (r == 0) {
+        ranks[id] = 1;
+        zeros.push_back(ast[id].toplevel_name());
+      }
+    }
+  }
+
+  return {std::move(graph), std::move(ranks), std::move(impure_builtin_calls), std::move(zeros)};
 }
 
 }; // namespace mold::internal

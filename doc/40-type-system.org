@@ -136,3 +136,65 @@ fails:
 
 In such cases, either ~Int.max~ must be called explicitly, or the type
 must be annotated beforehand as ~def x : Int? := max(pre(x), 1)~.
+
+** Structs
+
+Structs allow for multiple values to be packed into a single object.
+
+A struct is defined as below,
+
+#+BEGIN_SRC text
+  struct Foo {
+    x : Int,
+    y : String
+  }
+#+END_SRC
+
+Instances of the struct may be created by using the name in the
+definition,
+
+#+BEGIN_SRC text
+  in n : Int
+  def x := Foo { y := "Hello", x := n }
+#+END_SRC
+
+Note that each field is a small expression, and counts toward
+dependencies. For example, since the ~x~ field uses ~n~, ~n~ becomes a
+dependency. Also, fields may be written out of order compared to the
+definition.
+
+Members may be accessed with the ~->~ operator.
+
+#+BEGIN_SRC text
+  def k := Foo { y := x->y, x := 2 * n }
+#+END_SRC
+
+The type name of a struct is the same definition name,
+
+#+BEGIN_SRC text
+  def k : Foo := Foo { y := x->y, x := 2 * n }
+#+END_SRC
+
+Similarly, the name qualification uses the definition name:
+
+#+BEGIN_SRC text
+  struct Vec2i {
+    x : Int,
+    y : Int
+  }
+  extern pure Vec2i.add(v : Vec2i, w : Vec2i) : Vec2i
+
+  struct Vec2f {
+    x : Real,
+    y : Real
+  }
+  extern pure Vec2f.add(v : Vec2f, w : Vec2f) : Vec2f
+
+  def isum := add(vi, wi)
+  def vi := Vec2i { x := -8, y := 7 }
+  def wi := Vec2i { x := 11, y := 34 }
+
+  def fsum := add(vf, wf)
+  def vf := Vec2f { x := -6.5, y := 16.5 }
+  def wf := Vec2f { x := 3.5, y := 6 }
+#+END_SRC

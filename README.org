@@ -93,7 +93,7 @@ Mold only has a few top-level components,
  - ~function~ are small templates that are inlined at use. This makes
    them polymorphic, meaning their parameters don't have fixed types.
 
-Mold also has a fixed set of types:
+Mold has the following builtin types:
  - Int (3, -6)
  - Real (3.14, -273.15)
  - Bool (true, false)

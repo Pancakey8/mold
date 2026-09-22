@@ -28,6 +28,10 @@ std::vector<HInstr> Compiler::run() {
       compile(id);
   }
 
+  for (auto n : ranking.zero_formulas) {
+    instrs.emplace_back(HInstr::Mp{n, 1});
+  }
+
   for (auto [id, calls] : ranking.builtins) {
     if (!calls)
       continue;
@@ -351,9 +355,7 @@ void HighToLow::lower(const HInstr &instr) {
   std::visit(
       overload{
           [&](const HInstr::Upcast &) { lo.emplace_back(Op::UPCAST); },
-          [&](const HInstr::DefStr &i) {
-            syms.fields[i.str] = i.fields;
-          },
+          [&](const HInstr::DefStr &i) { syms.fields[i.str] = i.fields; },
           [&](const HInstr::MkStr &i) {
             lo.emplace_back(Op::MKSTR, struct_at(i.str), i.initc);
           },
