@@ -532,7 +532,7 @@ NodeId Parser::parse_tl() {
       }
     }
 
-    std::println("Parse struct {}", name);
+    // std::println("Parse struct {}", name);
 
     return pool.push(
         {StructDef{name, std::move(fields)}, start->source + end_src});

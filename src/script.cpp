@@ -36,6 +36,7 @@ struct Script::Impl {
   StringMap<std::uint32_t> vars, inputs, events, externs, structs;
   std::vector<std::string> event_names;
   std::vector<std::string> struct_names;
+  std::vector<std::vector<std::string>> struct_fields;
   Interpreter interp;
 
   explicit Impl(Program p) : prog(std::move(p)), interp(prog) {}
@@ -53,9 +54,9 @@ Script::Script(std::unique_ptr<Impl> impl) : impl(std::move(impl)) {}
 std::expected<Script, std::vector<mold::Diagnostic>>
 Script::of_string(std::string_view input) {
   auto ast = Parser{{input}}.parse();
-  for (auto id = ast.begin(); id != ast.end(); ++id) {
-    std::println("{}", ast[id].show(ast.pool));
-  }
+  // for (auto id = ast.begin(); id != ast.end(); ++id) {
+  //   std::println("{}", ast[id].show(ast.pool));
+  // }
   auto [sorting, sort_diags] = TopoSort{ast}.run();
   auto [typed, ast_diags] = Typing{ast, sorting}.run();
   if (!sort_diags.empty() || !ast_diags.empty()) {
@@ -72,13 +73,13 @@ Script::of_string(std::string_view input) {
 
     return std::unexpected(std::move(diags));
   }
-  for (auto id = typed.begin(); id != typed.end(); ++id) {
-    std::println("TYPED {}", typed[id].show(typed.pool));
-  }
+  // for (auto id = typed.begin(); id != typed.end(); ++id) {
+  //   std::println("TYPED {}", typed[id].show(typed.pool));
+  // }
   auto hir = Compiler{typed}.run();
-  for (const auto &instr : hir) {
-    std::println("{}", instr.show());
-  }
+  // for (const auto &instr : hir) {
+  //   std::println("{}", instr.show());
+  // }
   auto [prog, syms] = HighToLow{hir}.run();
   // for (const auto &instr : prog.instrs) {
   //   std::println("{}", instr.show());
@@ -108,9 +109,14 @@ Script::of_string(std::string_view input) {
   }
   StringMap<std::uint32_t> structs{};
   std::vector<std::string> struct_names{};
+  std::vector<std::vector<std::string>> struct_fields{};
   for (std::size_t id = 0; id < syms.structs.size(); ++id) {
     structs[std::string{syms.structs[id]}] = static_cast<std::uint32_t>(id);
     struct_names.push_back(std::string{syms.structs[id]});
+    std::vector<std::string> fields{};
+    for (auto field : syms.fields[syms.structs[id]])
+      fields.push_back(std::string{field});
+    struct_fields.push_back(std::move(fields));
   }
   // std::println("{}\n{}", vars, inputs);
   auto impl = std::make_unique<Impl>(std::move(prog));
@@ -121,6 +127,7 @@ Script::of_string(std::string_view input) {
   impl->event_names = std::move(event_names);
   impl->structs = std::move(structs);
   impl->struct_names = std::move(struct_names);
+  impl->struct_fields = std::move(struct_fields);
 
   return Script{std::move(impl)};
 }
@@ -164,14 +171,15 @@ InternValue Script::Impl::of_public(const Value &v) const {
             return {{.t = t.count()}, InternValue::TIME};
           },
           [this](Struct s) -> InternValue {
-            std::vector<InternValue> fields{};
-            fields.reserve(s.fields.size());
-            for (const auto &field : s.fields)
-              fields.push_back(of_public(field));
             if (auto it = structs.find(s.kind); it != structs.end()) {
+              std::vector<InternValue> fields{};
+              fields.reserve(s.fields.size());
+              for (const auto &k : struct_fields[it->second]) {
+                fields.push_back(of_public(s.fields[k]));
+              }
               return InternValue::of_struct(it->second, fields);
             } else {
-              return InternValue::of_struct(-1, fields);
+              return InternValue::of_struct(-1, {});
             }
           }},
       v.data);
@@ -203,12 +211,13 @@ Value Script::Impl::of_intern(const InternValue &ival) const {
   case internal::InternValue::TIME:
     return {Time{ival.data.t}};
   case internal::InternValue::STRUCT:
-    std::vector<Value> fields{};
+    auto &name = struct_names[ival.data.st->tag];
+    auto &field_names = struct_fields[ival.data.st->tag];
+    std::unordered_map<std::string_view, Value> fields{};
     fields.reserve(ival.data.st->fieldc);
     for (std::uint16_t i = 0; i < ival.data.st->fieldc; ++i) {
-      fields.push_back(of_intern(ival.data.st->fields[i]));
+      fields[field_names[i]] = of_intern(ival.data.st->fields[i]);
     }
-    auto &name = struct_names[ival.data.st->tag];
     return {Struct{name, std::move(fields)}};
   }
 }

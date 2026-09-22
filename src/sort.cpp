@@ -82,7 +82,7 @@ std::pair<SortResult, std::vector<Diagnostic>> TopoSort::run() {
     if (!node.is_toplevel()) // Errors. TODO: Top-level error reporting
       continue;
     auto name = node.toplevel_name();
-    std::println("TL {}", name);
+    // std::println("TL {}", name);
     if (tls.contains(name)) {
       diags.emplace_back("Redefinition of existing top-level name",
                          node.source);

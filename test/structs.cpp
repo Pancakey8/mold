@@ -22,10 +22,10 @@ int main() {
 
   auto x = std::get<mold::Struct>(script.read("x").data);
   assert(x.kind == "Foo");
-  assert(std::get<std::int64_t>(x.fields[0].data) == 3);
-  assert(std::get<std::string>(x.fields[1].data) == "Hello");
+  assert(std::get<std::int64_t>(x.fields["x"].data) == 3);
+  assert(std::get<std::string>(x.fields["y"].data) == "Hello");
   auto k = std::get<mold::Struct>(script.read("k").data);
   assert(k.kind == "Foo");
-  assert(std::get<std::int64_t>(k.fields[0].data) == 6);
-  assert(std::get<std::string>(k.fields[1].data) == "Hello");
+  assert(std::get<std::int64_t>(k.fields["x"].data) == 6);
+  assert(std::get<std::string>(k.fields["y"].data) == "Hello");
 }

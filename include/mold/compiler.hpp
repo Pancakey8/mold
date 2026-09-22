@@ -78,6 +78,7 @@ struct Instr {
 
 #define HINSTR_KIND_LIST(FIRST, REST)                                          \
   FIRST(Upcast)                                                                \
+  REST(DefStr)                                                                 \
   REST(MkStr)                                                                  \
   REST(Memb)                                                                   \
   REST(Comment)                                                                \
@@ -250,6 +251,11 @@ struct HInstr {
     std::uint16_t initc;
   };
 
+  struct DefStr {
+    StructId str;
+    std::vector<std::string_view> fields;
+  };
+
   struct Upcast {};
 
 #define F(T) T
@@ -277,6 +283,7 @@ struct SymbolTable {
   std::vector<HInstr::EventId> events{};
   std::vector<HInstr::ExtId> exts{};
   std::vector<HInstr::StructId> structs{};
+  std::unordered_map<HInstr::StructId, std::vector<std::string_view>> fields{};
 };
 
 class Compiler {

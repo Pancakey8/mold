@@ -9,6 +9,8 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
+#include <ranges>
+#include <unordered_map>
 
 namespace mold {
 
@@ -24,7 +26,7 @@ using Time = std::chrono::nanoseconds;
 
 struct Struct {
   std::string_view kind;
-  std::vector<Value> fields;
+  std::unordered_map<std::string_view, Value> fields;
 };
 
 struct Value {
@@ -105,14 +107,16 @@ template <> struct std::formatter<mold::Value> {
             }
             return std::format_to(out, ")");
           } else if constexpr (std::is_same_v<T, mold::Struct>) {
-            auto out = std::format_to(ctx.out(), "{}(", data.kind);
-            for (std::size_t i = 0; i < data.fields.size(); ++i) {
+            auto out = std::format_to(ctx.out(), "{} {{", data.kind);
+            std::size_t i{0};
+            for (const auto &[k, v] : data.fields) {
               if (i > 0) {
                 out = std::format_to(out, ", ");
               }
-              out = std::format_to(out, "{}", data.fields[i]);
+              out = std::format_to(out, "{} := {}", k, v);
+              ++i;
             }
-            return std::format_to(out, ")");
+            return std::format_to(out, "}}");
           } else if constexpr (std::is_same_v<T, mold::Date>) {
             return std::format_to(ctx.out(), "@{:%Y-%m-%dT%H:%M:%S}", data);
           } else if constexpr (std::is_same_v<T, mold::Time>) {

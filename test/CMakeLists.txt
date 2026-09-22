@@ -13,6 +13,7 @@ set(TEST_SOURCES
   doc-30-example-1.cpp
   self-trigger.cpp
   structs.cpp
+  struct_ops.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

@@ -16,6 +16,13 @@ namespace mold::internal {
 std::vector<HInstr> Compiler::run() {
   ranking = ranks_of(ast);
 
+  for (const auto &[name, sig] : ast.structs) {
+    std::vector<std::string_view> fields{};
+    for (auto fname : sig.order)
+      fields.push_back(fname);
+    instrs.emplace_back(HInstr::DefStr{name, fields});
+  }
+
   for (auto [id, r] : ranking.ranks) {
     if (r == 0)
       compile(id);
@@ -344,12 +351,13 @@ void HighToLow::lower(const HInstr &instr) {
   std::visit(
       overload{
           [&](const HInstr::Upcast &) { lo.emplace_back(Op::UPCAST); },
+          [&](const HInstr::DefStr &i) {
+            syms.fields[i.str] = i.fields;
+          },
           [&](const HInstr::MkStr &i) {
             lo.emplace_back(Op::MKSTR, struct_at(i.str), i.initc);
           },
-          [&](const HInstr::Memb &i) {
-            lo.emplace_back(Op::MEMB, i.field);
-          },
+          [&](const HInstr::Memb &i) { lo.emplace_back(Op::MEMB, i.field); },
           [&](const HInstr::Comment &) {},
           [&](const HInstr::Term &) { lo.emplace_back(Op::TERM); },
           [&](const HInstr::Dispatch &i) {
@@ -488,6 +496,7 @@ std::string HInstr::show() const {
     [](const Dispatch& n) -> std::string { return std::format("[{}]", n.glob); },
     [](const Memb& n) -> std::string { return std::format("[{}]", n.field); },
     [](const MkStr& n) -> std::string { return std::format("[{}], {}", n.str, n.initc); },
+    [](const DefStr& n) -> std::string { return std::format("[{}], {}", n.str, n.fields); },
     [](auto&&) -> std::string { return ""; }
   }, data);
   // clang-format on

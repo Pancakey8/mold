@@ -30,7 +30,7 @@ std::pair<TypedAST, std::vector<Diagnostic>> Typing::run() {
         sig.fields[fname] = inferred[field.id];
         sig.order.push_back(fname);
       }
-      std::println("struct {}", name);
+      // std::println("struct {}", name);
       structs[name] = sig;
     }
   }
