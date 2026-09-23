@@ -61,4 +61,28 @@ int main() {
     assert(std::get<std::int64_t>(script3.read("x").data) == x);
     assert(std::get<std::int64_t>(script3.read("y").data) == y);
   }
+
+  // clang-format off
+  std::string input4 {
+    "def x := not(pre(x)) ? true\n"
+    "extern pure my_not(b : Bool) : Bool\n"
+    "def y := not(pre(x) ? false)\n"
+  };
+  // clang-format on
+
+  auto script4 = make_script(input4);
+  script4.implement("my_not", [](auto args) -> mold::Value {
+    auto b = std::get<bool>(args[0].data);
+    return {!b};
+  });
+
+  for (std::int64_t t = 1; t < 10; ++t) {
+    if (auto res = script4.tick(); !res.has_value()) {
+      std::println("{}", res.error());
+      assert(false && "Interpreter crash");
+    }
+    std::println("x = {} | y = {}", script4.read("x"), script4.read("y"));
+    assert(std::get<bool>(script4.read("x").data) == (t % 2));
+    assert(std::get<bool>(script4.read("y").data) == (t % 2));
+  }
 }

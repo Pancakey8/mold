@@ -15,6 +15,7 @@ set(TEST_SOURCES
   structs.cpp
   struct_ops.cpp
   null_ops.cpp
+  rank_zero.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

@@ -125,9 +125,15 @@ Ranking ranks_of(const TypedAST &ast) {
 
     for (const auto &dep : deps) {
       auto it = tls.find(dep);
+
       if (it != tls.end()) {
-        graph[it->second].push_back(id);
-        degrees[id]++;
+        const auto &n = ast[it->second];
+        bool is_pure_extern = std::holds_alternative<Extern>(n.data) &&
+                              std::get<Extern>(n.data).pure;
+        if (!is_pure_extern) {
+          graph[it->second].push_back(id);
+          degrees[id]++;
+        }
       } else if (is_impure_builtin(dep)) {
         impure_builtin_calls[id] = true;
       }
@@ -198,7 +204,8 @@ Ranking ranks_of(const TypedAST &ast) {
     }
   }
 
-  return {std::move(graph), std::move(ranks), std::move(impure_builtin_calls), std::move(zeros)};
+  return {std::move(graph), std::move(ranks), std::move(impure_builtin_calls),
+          std::move(zeros)};
 }
 
 }; // namespace mold::internal
