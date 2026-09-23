@@ -27,3 +27,4 @@
 | Real.max      | REAL?, REAL? | REAL?   | Pure   | Returns the larger parameter for real numbers |
 | String.length | STRING?      | INT     | Pure   | Returns the length of a string                |
 | Date.now      |              | DATE    | Impure | Returns the current date                      |
+| not           | BOOL?        | BOOL?   | Pure   | Reverses a boolean value                      |

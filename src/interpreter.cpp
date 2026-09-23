@@ -470,7 +470,7 @@ void Interpreter::run() {
       if (l.tag == InternValue::NIL) {
         res = true;
       } else if (r.tag == InternValue::NIL) {
-        res = false;
+        res = l.tag == InternValue::NIL;
       } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i <= r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {
@@ -498,9 +498,9 @@ void Interpreter::run() {
       stack.pop();
       bool res = false;
       if (l.tag == InternValue::NIL) {
-        res = r.tag != InternValue::NIL;
+        res = false;
       } else if (r.tag == InternValue::NIL) {
-        res = true;
+        res = l.tag != InternValue::NIL;
       } else if (l.tag == InternValue::INT && r.tag == InternValue::INT) {
         res = l.data.i > r.data.i;
       } else if (l.tag == InternValue::REAL && r.tag == InternValue::REAL) {

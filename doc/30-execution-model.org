@@ -1,14 +1,16 @@
 #+TITLE: Understanding Mold Runtime
 
 Mold doesn't follow a traditional top-to-bottom execution
-model. Instead, the runtime evaluates only necessary formulae by
-following the dependency relations. Execution happens only on discrete
-steps called ticks.
+model. Instead, evaluation occurs in discrete steps called *ticks*,
+where the runtime evaluates formulae by tracking synchronous
+dependency relations.
 
 ** Dependency Graph
 
-Mold represents dependencies as a directed graph. Each edge on the
-graph represents a "providing" relation. Example:
+Mold models dependencies on a directed acyclic graph (DAG), where each
+edge presents a "provides" or "causes" relation. The graph is
+synchronous, and only answers the question of "what runs next on this
+tick?". To illustrate:
 
 #+BEGIN_SRC text
   in x : Int
@@ -29,43 +31,32 @@ graph represents a "providing" relation. Example:
 
 [[file:./img/doc-30-graph-1.png]]
 
-Dependencies guide evaluation. When the host feeds a new value for
-~x~, the graph suggests that ~foo~ must be evaluated. To illustrate,
-if ~x = 2~ initially, then ~foo = 4~. If the host then feeds ~x = 3~,
-then ~foo~ must update to ~9~. This propagates further to ~bar~, which
-has to update from ~4 + y~ to ~9 + y~.
+If the host feeds ~x~ a new value, that causes ~foo~ to run. For
+example, if the host feeds ~x = 2~ and ~y = 4~, then the runtime first
+considers ~foo~ and then ~bar~. First, ~foo~ evaluates to ~4~, then
+~bar~ evaluates to ~8~.
 
-However, each node can also decide on a cutoff. For example, if the
-host were to feed ~x = -2~ instead of ~x = 3~ as in the last example,
-then ~foo~ evaluates to ~4~ again. After this evaluation, ~foo~ no
-longer propagates, and ~bar~ doesn't evaluate again, assuming ~y~
-remains the same.
-
-Due to the way the propagation works, if there were a cycle such as,
-
-#+BEGIN_SRC text
-  def x := y + 1
-  def y := x + 1
-#+END_SRC
-
-then computation would not terminate. In general, since cycles can
-diverge they are rejected with the exception of ~pre()~ (explained
-later).
+However, a cutoff is also possible if a change doesn't occur at any
+given node. For example, if the next tick feeds ~x = -2~ and ~y = 4~,
+then ~y~ is immediately cut off. The runtime then considers ~foo~,
+which evaluates to ~foo = 4~ again, so ~foo~ doesn't propagate a
+change. In this situation, since neither ~y~ nor ~foo~ changed, ~bar~
+doesn't re-evaluate.
 
 ** Ticks
 :PROPERTIES:
 :CUSTOM_ID: ticks
 :END:
 
-When the host calls ~feed()~ and similar method on the ~Script~
-object, it only marks a change, but it doesn't commit to it, and it
-doesn't evaluate. Ticks are the discrete steps, triggered by the
-~tick()~ method, where evaluation occurs and where changes are
-committed.
+Mold doesn't react to changes as soon as they happen, instead
+reactions only occur on individual ticks. For example, even if the
+host calls ~feed()~, a change doesn't happen right away. Instead, the
+~feed()~ is noted, but not committed until the next call to ~tick()~,
+where evaluation actually occurs.
 
-The clearest mental model for ticks is to treat each formula as a
-sequence. The tick provides the maximum range of the indices. For
-example:
+Treating each formula as a sequence, ~feed()~ only assigns a value to
+the index at the current tick, and it isn't until a call to ~tick()~
+that the ~feed()~ assigns to the next index. For example,
 
 #+BEGIN_SRC text
   in y : Int
@@ -87,17 +78,36 @@ values of two sequences.
 
 ** Shifting the sequences
 
-The ~pre()~ function reads old values of a top-level variable, such as
-inputs and formulae. By default, it reads the last value, but
-optionally a depth can be specified as a second argument to read the
-last Nth value. Since ticks progress in steps, this value doesn't
-always exist on the initial few ticks. In these cases, ~pre~ evaluates
-to =null=.
+Using the sequence model from before, the ~pre()~ operation shifts
+known terms of a sequence, like a bitshift for numbers. Similar to the
+bitshift, ~pre()~ fills in missing digits with a zero value, =null=.
 
-Since ~pre~ is a lookup to old values, it doesn't change in a given
-tick. As such, it doesn't cause a propagation loop, and is omitted
-from dependencies. As a result, cycles such as the one below are
-allowed, and these cycles progress over ticks.
+For instance, for an ~x~ computed by some means, ~pre(x)~ and ~pre(x, 2)~ are as
+below.
+
+| Tick | x                   | ~pre(x)~              | ~pre(x, 2)~             |
+|------+---------------------+-----------------------+-------------------------|
+|    0 | x = (10)            | x = (null)            | x = (null)              |
+|    1 | x = (10, 6)         | x = (null, 10)        | x = (null, null)        |
+|    2 | x = (10, 6, 12)     | x = (null, 10, 6)     | x = (null, null, 10)    |
+|    3 | x = (10, 6, 12, 22) | x = (null, 10, 6, 12) | x = (null, null, 10, 6) |
+
+Since ~pre()~ only shifts in values from past ticks, it isn't a
+synchronous value, and it doesn't constitute a dependency. This means
+that, while cycles aren't allowed on the dependency graph (it's
+acyclic), a logical cycle may be created with ~pre()~ and made to
+evolve across ticks.
+
+Rejected (cyclic dependency x -> y and y -> x):
+
+#+BEGIN_SRC text
+  in a : Int
+  in b : Int
+  def x := y + a
+  def y := x + b
+#+END_SRC
+
+Allowed (pre(x) and pre(y) aren't dependencies):
 
 #+BEGIN_SRC text
   in a : Int
@@ -106,24 +116,101 @@ allowed, and these cycles progress over ticks.
   def y := pre(x) ? 0 + b
 #+END_SRC
 
-It should be noted that, since ~pre~ don't count toward dependencies,
-these cycles don't progress on their own, and require triggering
-dependencies (such as ~a~ or ~b~) to iterate, as with other formulae.
+However, since ~pre~ calls aren't dependencies, such a cycle isn't
+self-triggering. For instance,
 
-Using the sequence model defined in the [[#ticks][Ticks]] section, ~pre~ may be
-treated as a right-shift on the sequence of a variable. Values that
-shift past the current tick bounds are dropped, whereas values that
-remain empty after the shift are filled with =null=.
+#+BEGIN_SRC c++
+  std::vector<std::int64_t> as{5, 9, 1, 1, 6};
+  std::vector<std::int64_t> bs{2, 2, 3, 7, -4};
 
-For instance, using the table from the previous example, ~pre(x)~ and
-~pre(x, 2)~ operate as below:
+  for (auto [a, b] : std::views::zip(as, bs)) {
+    script3.feed("a", {a});
+    script3.feed("b", {b});
+    if (auto res = script3.tick(); !res.has_value()) {
+      std::println("{}", res.error());
+      assert(false && "Interpreter crash");
+    }
+    std::println("x = {} | y = {}", script3.read("x"), script3.read("y"));
+  }
+#+END_SRC
 
-| x                   | ~pre(x)~              | ~pre(x, 2)~             |
-|---------------------+-----------------------+-------------------------|
-| x = (10)            | x = (null)            | x = (null)              |
-| x = (10, 6)         | x = (null, 10)        | x = (null, null)        |
-| x = (10, 6, 12)     | x = (null, 10, 6)     | x = (null, null, 10)    |
-| x = (10, 6, 12, 22) | x = (null, 10, 6, 12) | x = (null, null, 10, 6) |
+If the formulae were evaluated on each tick, this would have output
+
+#+BEGIN_SRC text
+  x = 5 | y = 2
+  x = 11 | y = 7
+  x = 8 | y = 14
+  x = 15 | y = 15
+  x = 21 | y = 11
+#+END_SRC
+
+However, since ~x~ is tied only to ~a~ as a dependency, it doesn't
+evaluate on tick 3, and since ~y~ is tied only to ~b~ as a dependency,
+it doesn't evaluate on tick 1. This gives a real output of
+
+#+BEGIN_SRC text
+  x = 5 | y = 2
+  x = 11 | y = 2 (!)
+  x = 3 | y = 14
+  x = 3 (!) | y = 10
+  x = 16 | y = -1
+#+END_SRC
+
+where the ~(!)~ editorially marks the danger sections where evaluation
+didn't occur.
+
+In this case, ~x~ and ~y~ had natural triggers on the dependency
+graph. However, given an example like the one below:
+
+#+BEGIN_SRC text
+  def x := max(1, pre(x) + 1)
+  def y := x * 2
+#+END_SRC
+
+#+BEGIN_SRC dot :file ./img/doc-30-graph-2.png :exports none :results silent
+  digraph G {
+    rankdir = LR
+
+    x -> y
+  }
+#+END_SRC
+
+[[file:./img/doc-30-graph-2.png]]
+
+The graph hints that ~x~ has no triggers. Without the ~pre()~
+operations, such nodes only exist for inputs (~in x : Int~) and
+constant values (~def x := 10~). So similarly, the dependency graph
+suggest that ~x~ here must be a constant too. However, the runtime
+relaxes the rules in this case to evaluate the source node anyways,
+allowing ~x~ to increment on each tick. This can be reasoned as the
+tick progression itself being a dependency.
+
+#+BEGIN_SRC c++
+  for (std::int64_t t = 1; t < 10; ++t) {
+    if (auto res = script.tick(); !res.has_value()) {
+      std::println("{}", res.error());
+      assert(false && "Interpreter crash");
+    }
+    std::println("x = {} | y = {}", script.read("x"), script.read("y"));
+  }
+#+END_SRC
+
+#+BEGIN_SRC text
+  x = 1 | y = 2
+  x = 2 | y = 4
+  x = 3 | y = 6
+  x = 4 | y = 8
+  x = 5 | y = 10
+  x = 6 | y = 12
+  x = 7 | y = 14
+  x = 8 | y = 16
+  x = 9 | y = 18
+#+END_SRC
+
+The key takeaway is that ~pre~ calls only bring old values into view
+without causing a re-evaluation as the history naturally
+changes. Evaluation is tied only to synchronous dependencies and tick
+progression.
 
 ** Null arithmetic
 :PROPERTIES:
@@ -144,7 +231,8 @@ Most operations directly propagate =null=,
 
 For those coming from scripting languages, =null= interaction with
 boolean operations may be unexpected. The standard ~value || default~
-pattern fails since boolean operations also directly propagate null:
+pattern fails since, beside being a type error for most cases, boolean
+operations also directly propagate null:
 
 #+BEGIN_SRC text
   true && null = null
@@ -157,8 +245,8 @@ The defaulting pattern for Mold is instead the coalescing operator, ~?~.
   null ? 3 = 3
 #+END_SRC
 
-Equals (~=~) and not equals (~/=~) are also operators that consume
-=null=, producing only a direct boolean.
+Equals (~=~) and not equals (~/=~) are total over =null=, producing
+only a direct boolean.
 
 #+BEGIN_SRC text
   x = x # true
@@ -170,11 +258,10 @@ Equals (~=~) and not equals (~/=~) are also operators that consume
   null /= null # false
 #+END_SRC
 
-Inequality similarly operates with null, producing just a boolean. In
-inequalities, ~null~ is defined as the smallest value, meaning ~x > null~,
-~x >= null~ and ~null <= x~ always hold. For ~x < null~, it is
-generally true, but since ~null < null~ is false (they are equal) it
-doesn't generalise unlike the other cases.
+Inequality is similarly total over =null=, producing just a
+boolean. In inequalities, ~null~ is defined as the smallest value. To
+illustrate, ~null < x~ for non-null x is always true, similarly ~null
+> x~ is always false for non-null x.
 
 For if/else expressions, ~null~ is treated the same as false,
 

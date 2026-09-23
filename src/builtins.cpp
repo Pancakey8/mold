@@ -48,6 +48,16 @@ InternValue builtin_real_max(std::int16_t, InternValue *argv) {
   return {{.r = std::max(l, r)}, InternValue::REAL};
 }
 
+InternValue builtin_not(std::int16_t, InternValue *argv) {
+  if (argv[0].tag == InternValue::NIL) {
+    argv[0].inc();
+    return argv[0];
+  }
+
+  auto b = argv[0].data.b;
+  return {{.b = !b}, InternValue::BOOL};
+}
+
 // clang-format off
 static std::vector<Builtin> BUILTINS {
 #define BUILTIN(NAME, PARS, RET, PURITY, IMPL, DOC) Builtin{NAME, PARS, RET, PURITY, IMPL},

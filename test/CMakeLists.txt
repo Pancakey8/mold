@@ -14,6 +14,7 @@ set(TEST_SOURCES
   self-trigger.cpp
   structs.cpp
   struct_ops.cpp
+  null_ops.cpp
 )
 
 foreach(test_src ${TEST_SOURCES})

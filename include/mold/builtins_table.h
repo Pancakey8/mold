@@ -24,3 +24,9 @@ BUILTIN("Date.now",
   false,
   builtin_date_now,
   "Returns the current date")
+BUILTIN("not",
+  PARAMS(TY(BOOL, true)),
+  TY(BOOL, true),
+  true,
+  builtin_not,
+  "Reverses a boolean value")
